@@ -811,8 +811,9 @@ const queryAuthoritativeServerOverTcp = (serverAddress, query) => new Promise((r
     client.connect(53, serverAddress);
 });
 
-const queryAuthoritativeServer = (serverAddress, name, type) => new Promise((resolve, reject) => {
-    const client = dgram.createSocket(net.isIP(serverAddress) === 6 ? 'udp6' : 'udp4');
+const queryAuthoritativeServer = (serverAddress, name, type, createSocket = dgram.createSocket,
+    queryOverTcp = queryAuthoritativeServerOverTcp) => new Promise((resolve, reject) => {
+    const client = createSocket(net.isIP(serverAddress) === 6 ? 'udp6' : 'udp4');
     const query = {
         type: 'query',
         id: Math.floor(Math.random() * 65535),
@@ -830,7 +831,7 @@ const queryAuthoritativeServer = (serverAddress, name, type) => new Promise((res
         try {
             const response = dnsPacket.decode(message);
             if (response.flags & dnsPacket.TRUNCATED_RESPONSE) {
-                queryAuthoritativeServerOverTcp(serverAddress, query).then(resolve, reject);
+                queryOverTcp(serverAddress, query).then(resolve, reject);
                 return;
             }
             resolve(response);
@@ -852,18 +853,20 @@ const queryAuthoritativeServer = (serverAddress, name, type) => new Promise((res
     });
 });
 
-const resolveDnsServerAddress = async (dnsServer, preferIpv6, resolutionDepth = 0) => {
+const resolveDnsServerAddress = async (dnsServer, preferIpv6, resolutionDepth = 0,
+    queryServer = queryAuthoritativeServer) => {
     try {
-        return await resolveDnsServerAddressByType(dnsServer, preferIpv6, resolutionDepth);
+        return await resolveDnsServerAddressByType(dnsServer, preferIpv6, resolutionDepth, queryServer);
     } catch (error) {
         if (preferIpv6) {
             throw error;
         }
-        return resolveDnsServerAddressByType(dnsServer, true, resolutionDepth);
+        return resolveDnsServerAddressByType(dnsServer, true, resolutionDepth, queryServer);
     }
 };
 
-const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDepth = 0) => {
+const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDepth = 0,
+    queryServer = queryAuthoritativeServer) => {
     if (net.isIP(dnsServer)) return dnsServer;
     if (resolutionDepth >= 5) {
         throw new Error('DNSサーバー名の解決で入れ子の委任が上限を超えました。');
@@ -877,7 +880,7 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
         let response;
         for (const nameServer of nameServers) {
             try {
-                response = await queryAuthoritativeServer(nameServer, queryName, queryType);
+                response = await queryServer(nameServer, queryName, queryType);
                 break;
             } catch (error) {
                 // 同じ委任先の次の権威サーバーを試す。
@@ -919,7 +922,7 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
             let resolvedNameServerAddress;
             for (const delegatedName of delegatedNames) {
                 try {
-                    resolvedNameServerAddress = await resolveDnsServerAddress(delegatedName, preferIpv6, resolutionDepth + 1);
+                    resolvedNameServerAddress = await resolveDnsServerAddress(delegatedName, preferIpv6, resolutionDepth + 1, queryServer);
                     break;
                 } catch (error) {
                     // 他の委任先NSの名前解決を試す。
@@ -1352,10 +1355,27 @@ const server = http.createServer(async (req, res) => {
 });
 
 const PORT = 3000;
-server.listen(PORT, () => {
-    console.log(`Webサーバーが起動しました: http://localhost:${PORT}`);
-});
+if (require.main === module) {
+    server.listen(PORT, () => {
+        console.log(`Webサーバーが起動しました: http://localhost:${PORT}`);
+    });
 
-server.on('error', (err) => {
-    console.error(`Webサーバーエラー: ${err.message}`);
-});
+    server.on('error', (err) => {
+        console.error(`Webサーバーエラー: ${err.message}`);
+    });
+}
+
+module.exports = {
+    buildDnsFlags,
+    getDnsTypeCode,
+    isInvalidDnsServer,
+    isInvalidQueryType,
+    isInvalidUdpSize,
+    makeHtmlFromDns,
+    queryAuthoritativeServer,
+    reverseIPv4,
+    reverseIPv6,
+    resolveDnsServerAddress,
+    server,
+    validateMQType
+};

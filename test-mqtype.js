@@ -1,99 +1,31 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
 const dnsTypes = require('dns-packet/types');
+const { getDnsTypeCode } = require('./dns-query-tool');
 
-// MQTYPE オプション構築テスト
-function testMQTypeOption() {
-    console.log('=== MQTYPE オプション構築テスト ===\n');
-    
-    // テストケース 1: 単一型
-    const mQType1 = 'A';
-    testBuildOption(mQType1);
-    
-    // テストケース 2: 複数型
-    const mQType2 = 'A,AAAA,MX';
-    testBuildOption(mQType2);
-    
-    // テストケース 3: 複数型（多数）
-    const mQType3 = 'A,AAAA,MX,NS,TXT,CNAME';
-    testBuildOption(mQType3);
-}
+const buildMQTypeOptionData = (value) => {
+    const types = value.split(',');
+    const data = Buffer.alloc(types.length * 2);
+    types.forEach((type, offset) => data.writeUInt16BE(getDnsTypeCode(type), offset * 2));
+    return data;
+};
 
-function testBuildOption(mQType) {
-    try {
-        const mQTypeArray = mQType.split(',');
-        const mQlength = mQTypeArray.length * 2;
-        const option = { code: 20, length: mQlength, data: Buffer.alloc(mQlength) };
-        
-        let offset = 0;
-        for (const type of mQTypeArray) {
-            const typeNum = dnsTypes.toType(type.trim());
-            option.data.writeUInt16BE(typeNum, offset);
-            offset += 2;
-        }
-        
-        console.log(`入力: "${mQType}"`);
-        console.log(`  オプションコード: ${option.code}`);
-        console.log(`  オプション長: ${option.length} bytes`);
-        console.log(`  バッファ内容: ${option.data.toString('hex')}`);
-        
-        // 検証: バッファが正しくエンコードされているか
-        console.log(`  検証:`);
-        let verifyOffset = 0;
-        for (const type of mQTypeArray) {
-            const typeNum = option.data.readUInt16BE(verifyOffset);
-            const typeName = dnsTypes.toString(typeNum);
-            console.log(`    - ${type.trim()} (${typeNum}) -> 確認: ${typeName}`);
-            verifyOffset += 2;
-        }
-        console.log('  ✓ 成功\n');
-    } catch (err) {
-        console.log(`✗ エラー: ${err.message}\n`);
+const parseMQTypeResponse = (data) => {
+    const types = [];
+    for (let offset = 0; offset < data.length; offset += 2) {
+        types.push(dnsTypes.toString(data.readUInt16BE(offset)));
     }
-}
+    return types;
+};
 
-// MQTYPE レスポンス解析テスト
-function testMQTypeResponseParsing() {
-    console.log('=== MQTYPE レスポンス解析テスト ===\n');
-    
-    // dns-packet の option.data は OPTION-LENGTH を含まず、OPTION-DATA のみ
-    const testBuffer = Buffer.from([
-        0, 1,       // A
-        0, 28,      // AAAA
-        0, 15       // MX
-    ]);
-    
-    console.log('シミュレート応答バッファ: ' + testBuffer.toString('hex'));
-    console.log('バッファ解析:\n');
-    
-    try {
-        const bufferLength = testBuffer.length;
-        console.log(`  オプション長: ${bufferLength} bytes`);
-        console.log(`  型情報:`);
-        
-        let mQTypeString = '';
-        for (let offset = 0; offset < bufferLength; offset += 2) {
-            const type = testBuffer.readUInt16BE(offset);
-            const typeName = dnsTypes.toString(type);
-            console.log(`    - offset ${offset}: type=${type} (${typeName})`);
-            mQTypeString += `${typeName},`;
-        }
-        
-        if (mQTypeString.length > 0) {
-            mQTypeString = mQTypeString.slice(0, -1);
-        }
-        
-        console.log(`\n  最終結果: ${mQTypeString}`);
-        console.log('  ✓ 成功\n');
-    } catch (err) {
-        console.log(`✗ エラー: ${err.message}\n`);
-    }
-}
+test('MQTYPEオプションをネットワークバイト順で構築する', () => {
+    assert.deepEqual(buildMQTypeOptionData('A'), Buffer.from([0, 1]));
+    assert.deepEqual(buildMQTypeOptionData('A,AAAA,MX'), Buffer.from([0, 1, 0, 28, 0, 15]));
+    assert.deepEqual(buildMQTypeOptionData('A,AAAA,MX,NS,TXT,CNAME'),
+        Buffer.from([0, 1, 0, 28, 0, 15, 0, 2, 0, 16, 0, 5]));
+});
 
-// テスト実行
-testMQTypeOption();
-testMQTypeResponseParsing();
-
-console.log('=== RFC 10029 実サーバーテスト ===\n');
-console.log('本番テストには RFC 10029 対応 DNS サーバーが必要です。');
-console.log('既知の対応サーバーは限定的です。');
-console.log('\n例: dns-web-tool.js で MQTYPE パラメータを指定して送信');
-console.log('  例: http://localhost:3000/?server=8.8.8.8&name=example.com&type=A&mqtype=A,AAAA');
+test('MQTYPEレスポンスのOPTION-DATAを型名へ変換する', () => {
+    const responseData = Buffer.from([0, 1, 0, 28, 0, 15]);
+    assert.deepEqual(parseMQTypeResponse(responseData), ['A', 'AAAA', 'MX']);
+});
