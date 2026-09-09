@@ -1,7 +1,11 @@
 {
   "type": "commonjs",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "test:mqtype": "node test-mqtype.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "dns-packet": "^5.6.1"

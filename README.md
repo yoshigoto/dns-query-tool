@@ -37,7 +37,7 @@ https://www.on-link.jp/dnsquerytool/
 
 ### 必要な環境
 
-- Node.js
+- Node.js 18以上
 - DNSサーバー (権威サーバー、フルサービスリゾルバー) に対してUDPまたはTCPの53番ポートで接続できるネットワーク
 
 ### 起動
@@ -53,10 +53,10 @@ http://localhost:3000/dnsquerytool/
 
 サーバーはポート `3000` で待ち受けます。公開環境などでアプリケーションのパスを変更する場合は、`APPLICATION_PATH` 環境変数を指定できます。
 
-PowerShellの例:
+環境変数を指定する場合:
 
-```powershell
-$env:APPLICATION_PATH = '/dnsquerytool'
+```sh
+APPLICATION_PATH=/dnsquerytool \
 node dns-query-tool.js
 ```
 
