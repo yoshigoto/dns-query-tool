@@ -956,7 +956,7 @@ const server = http.createServer(async (req, res) => {
     const staticFiles = {
         '/': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
         '/index.html': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
-        '/dns-web-tool-client.js': { file: 'dns-web-tool-client.js', contentType: 'application/javascript; charset=utf-8' }
+        '/dns-query-tool-client.js': { file: 'dns-query-tool-client.js', contentType: 'application/javascript; charset=utf-8' }
     };
     const staticFile = staticFiles[parsedUrl.pathname];
     if (staticFile) {

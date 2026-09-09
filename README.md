@@ -44,7 +44,7 @@ https://www.on-link.jp/dnsquerytool/
 
 ```sh
 npm install
-node dns-web-tool.js
+node dns-query-tool.js
 ```
 
 起動後、次のURLを開きます。
@@ -57,7 +57,7 @@ PowerShellの例:
 
 ```powershell
 $env:APPLICATION_PATH = '/dnsquerytool'
-node dns-web-tool.js
+node dns-query-tool.js
 ```
 
 ## クエリーオプション
@@ -95,8 +95,8 @@ http://localhost:3000/dnsquerytool/api/query?server=8.8.8.8&name=example.com&typ
 | ファイル | 役割 |
 | --- | --- |
 | `index.html` | 入力フォーム、説明、結果表示領域 |
-| `dns-web-tool-client.js` | フォーム送信、履歴操作、結果表示、リンクからの再クエリー |
-| `dns-web-tool.js` | HTTPサーバー、DNSパケット生成、UDP/TCP通信、応答解析、HTML生成 |
+| `dns-query-tool-client.js` | フォーム送信、履歴操作、結果表示、リンクからの再クエリー |
+| `dns-query-tool.js` | HTTPサーバー、DNSパケット生成、UDP/TCP通信、応答解析、HTML生成 |
 | `test-mqtype.js` | MQTYPEオプションの構築と応答解析の簡易テスト |
 | `package.json` | Node.js依存関係の定義 |
 
