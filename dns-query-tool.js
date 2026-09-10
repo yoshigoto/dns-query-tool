@@ -317,7 +317,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     } else if (rcode === 'REFUSED') {
         html += `<p style="color: red; margin: 0;">REFUSED: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> のポリシーによりクエリーが拒否されました。</p>`;
     } else if (rcode === 'FORMERR') {
-        html += `<p style="color: red; margin: 0;">FORMERR: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> が送信したパケットの形式に問題があると判断しました。</p>`;
+        html += `<p style="color: red; margin: 0;">FORMERR: DNSメッセージの形式に問題があると、応答したサーバー <code>${escapeHtml(dnsServer)}</code> が判断しました。</p>`;
     } else if (rcode === 'NXDOMAIN') {
         html += `<p style="color: red; margin: 0;">NXDOMAIN: 問い合わせたドメイン名 <code>${escapeHtml(questionName)}</code> は存在しませんでした。</p>`;
         if (qnameMinimisation) {
