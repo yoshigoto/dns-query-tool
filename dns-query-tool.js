@@ -127,7 +127,16 @@ const replaceUnknownRrTypeList = (rrtypes) => {
 
 const decodeResourceRecord = (type, msg) => {
     let displayData = '';
-    if (type === 'CAA') {
+    if (type === 'TXT') {
+        // TXTレコードはBufferまたは'text'の配列か、Bufferか'text'で返ってくる
+        if (Array.isArray(msg)) {
+            displayData = msg.map(buf => Buffer.isBuffer(buf) ? buf.toString('utf8') : buf).join('');
+        } else if (Buffer.isBuffer(msg)) {
+            displayData = msg.toString('utf8');
+        } else {
+            displayData = msg;
+        }
+    } else if (type === 'CAA') {
         displayData = `flags: ${msg.flags}, tag: ${msg.tag}, value: ${msg.value}, issuerCritical: ${msg.issuerCritical}`;
     } else if (type === 'DNSKEY') {
         // dns-packet では DNSKEYリソースレコードの Protocol は 3 固定
@@ -363,16 +372,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         response.answers.forEach((answer) => {
             let displayData = decodeResourceRecord(answer.type, answer.data);
             if (displayData.length === 0) {
-                if (answer.type === 'TXT') {
-                    // TXTレコードはBufferまたは'text'の配列か、Bufferか'text'で返ってくる
-                    if (Array.isArray(answer.data)) {
-                        displayData = escapeHtml(answer.data.map(buf => Buffer.isBuffer(buf) ? buf.toString('utf8') : buf).join(''));
-                    } else if (Buffer.isBuffer(answer.data)) {
-                        displayData = escapeHtml(answer.data.toString('utf8'));
-                    } else {
-                        displayData = escapeHtml(answer.data);
-                    }
-                } else if (answer.type === 'CNAME') {
+                if (answer.type === 'CNAME') {
                     // CNAMEレコードはデータを検索対象ドメイン名として扱い、後続の検索ができるようにする
                     displayData = addLinkToDisplayData(origin, pathname, 'a.root-servers.net', answer.data, queryType, false, checkingDisabled,
                         sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, 255, qnameType, answer.data);
