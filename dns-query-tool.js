@@ -298,7 +298,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         flagString = flagString.slice(0, -1);
     }
     html += `<li>フラグ (flags): <code>${flagString}</code></li>`;
-    if (response.flags & dnsPacket.TRUNCATED_RESPONSE) {
+    if (!sendTcp && (response.flags & dnsPacket.TRUNCATED_RESPONSE)) {
         const displayData = addLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
             true, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
         html += `<ul><li style="color: blue; margin: 0;">TCフラグが立っているので TCPでの再確認を推奨します。${displayData} をクリックしてみてください。</li></ul>`;

@@ -177,6 +177,21 @@ test('UDPのTCフラグを受けるとTCP応答へ切り替える', async () => 
     assert.deepEqual(tcpQuery.questions, [{ name: 'example.com', type: 'A', class: 'IN' }]);
 });
 
+test('TCP問い合わせ時はTC推奨メッセージを出さない', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: dnsPacket.TRUNCATED_RESPONSE,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, true, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.doesNotMatch(html, /TCフラグが立っているので TCPでの再確認を推奨します/);
+});
+
 test('DNSサーバー解決はIPv4失敗時にIPv6を試し、委任先を再帰解決する', async () => {
     const calls = [];
     const resolveWithIpv6Fallback = async (address, name, type) => {
