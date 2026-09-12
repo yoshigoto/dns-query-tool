@@ -984,7 +984,7 @@ const isInvalidQueryType = (queryType) => {
 
 const validateDomainName = (name) => {
     if (typeof name !== 'string' || name.trim() === '') {
-        return 'empty name';
+        return 'ドメイン名が空です';
     }
 
     const trimmed = name.trim();
@@ -993,7 +993,7 @@ const validateDomainName = (name) => {
     }
 
     if (trimmed.startsWith('.')) {
-        return 'empty label';
+        return '空のラベルが含まれています (先頭のピリオド等)';
     }
 
     let wireLength = 1; // 終端ルートラベル (0x00)
@@ -1008,11 +1008,11 @@ const validateDomainName = (name) => {
             inEscape = false;
             if (/^[0-9]$/.test(char)) {
                 if (i + 2 >= trimmed.length || !/^[0-9]{2}$/.test(trimmed.slice(i + 1, i + 3))) {
-                    return 'bad escape sequence';
+                    return '不正なエスケープシーケンスです';
                 }
                 const num = parseInt(trimmed.slice(i, i + 3), 10);
                 if (num > 255) {
-                    return 'bad escape sequence';
+                    return '不正なエスケープシーケンスです';
                 }
                 currentLabelBytes += 1;
                 i += 2;
@@ -1021,7 +1021,7 @@ const validateDomainName = (name) => {
                 currentLabelBytes += charBuf.length;
             }
             if (currentLabelBytes > 63) {
-                return 'label too long';
+                return 'ラベルが長すぎます (最大63バイト)';
             }
             continue;
         }
@@ -1033,11 +1033,11 @@ const validateDomainName = (name) => {
 
         if (char === '.') {
             if (currentLabelBytes === 0) {
-                return 'empty label';
+                return '空のラベルが含まれています (連続したピリオド等)';
             }
             wireLength += 1 + currentLabelBytes;
             if (wireLength > 255) {
-                return 'name too long';
+                return 'ドメイン名が長すぎます (最大255バイト)';
             }
             currentLabelBytes = 0;
             labelCount++;
@@ -1046,18 +1046,18 @@ const validateDomainName = (name) => {
 
         const code = char.charCodeAt(0);
         if (code <= 0x20 || code === 0x7f) {
-            return 'illegal character';
+            return '不正な文字が含まれています';
         }
 
         const charBuf = Buffer.from(char, 'utf8');
         currentLabelBytes += charBuf.length;
         if (currentLabelBytes > 63) {
-            return 'label too long';
+            return 'ラベルが長すぎます (最大63バイト)';
         }
     }
 
     if (inEscape) {
-        return 'bad escape sequence';
+        return '不正なエスケープシーケンスです';
     }
 
     if (currentLabelBytes > 0) {
@@ -1066,11 +1066,11 @@ const validateDomainName = (name) => {
     }
 
     if (wireLength > 255) {
-        return 'name too long';
+        return 'ドメイン名が長すぎます (最大255バイト)';
     }
 
     if (labelCount === 0) {
-        return 'empty label';
+        return '空のラベルが含まれています';
     }
 
     return null;
@@ -1393,7 +1393,7 @@ const server = http.createServer(async (req, res) => {
     if (queryType !== 'PTR-x') {
         const domainValidationError = validateDomainName(domainName);
         if (domainValidationError) {
-            html += `<div class="result error"><p>エラー: 不正なドメイン名です ('${escapeHtml(domainName)}' is not a legal name (${escapeHtml(domainValidationError)}))。</p></div>`;
+            html += `<div class="result error"><p>エラー: 不正なドメイン名です ('${escapeHtml(domainName)}' は無効なドメイン名です: ${escapeHtml(domainValidationError)})。</p></div>`;
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(html);
             return;

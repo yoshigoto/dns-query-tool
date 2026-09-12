@@ -53,21 +53,21 @@ test('RFCに基づくドメイン名の入力検証 (validateDomainName)', () =>
     assert.equal(validateDomainName('example\\032com'), null);
 
     // empty name
-    assert.equal(validateDomainName(''), 'empty name');
-    assert.equal(validateDomainName('   '), 'empty name');
+    assert.match(validateDomainName(''), /ドメイン名が空です/);
+    assert.match(validateDomainName('   '), /ドメイン名が空です/);
 
     // empty label (連続ピリオド、ルート以外の先頭ピリオド、複数末尾ピリオド等)
-    assert.equal(validateDomainName('..'), 'empty label');
-    assert.equal(validateDomainName('foo..bar'), 'empty label');
-    assert.equal(validateDomainName('.example.com'), 'empty label');
-    assert.equal(validateDomainName('example.com..'), 'empty label');
-    assert.equal(validateDomainName('a..'), 'empty label');
+    assert.match(validateDomainName('..'), /空のラベル/);
+    assert.match(validateDomainName('foo..bar'), /空のラベル/);
+    assert.match(validateDomainName('.example.com'), /空のラベル/);
+    assert.match(validateDomainName('example.com..'), /空のラベル/);
+    assert.match(validateDomainName('a..'), /空のラベル/);
 
     // label too long (63オクテット超)
     const label63 = 'a'.repeat(63);
     const label64 = 'a'.repeat(64);
     assert.equal(validateDomainName(`${label63}.com`), null);
-    assert.equal(validateDomainName(`${label64}.com`), 'label too long');
+    assert.match(validateDomainName(`${label64}.com`), /ラベルが長すぎます/);
 
     // name too long (ワイヤ形式で255オクテット超)
     // 63文字ラベル * 3 (各64バイト) + 57文字ラベル (58バイト) + ルート (1バイト) = 251バイト (OK)
@@ -75,17 +75,17 @@ test('RFCに基づくドメイン名の入力検証 (validateDomainName)', () =>
     assert.equal(validateDomainName(longValidDomain), null);
     // 63文字ラベル * 3 + 62文字ラベル = 64*3 + 63 + 1 = 256バイト (超過)
     const longInvalidDomain = `${label63}.${label63}.${label63}.${'a'.repeat(62)}`;
-    assert.equal(validateDomainName(longInvalidDomain), 'name too long');
+    assert.match(validateDomainName(longInvalidDomain), /ドメイン名が長すぎます/);
 
     // bad escape sequence
-    assert.equal(validateDomainName('example\\'), 'bad escape sequence');
-    assert.equal(validateDomainName('example\\999'), 'bad escape sequence');
-    assert.equal(validateDomainName('example\\1'), 'bad escape sequence');
-    assert.equal(validateDomainName('example\\12'), 'bad escape sequence');
+    assert.match(validateDomainName('example\\'), /不正なエスケープシーケンス/);
+    assert.match(validateDomainName('example\\999'), /不正なエスケープシーケンス/);
+    assert.match(validateDomainName('example\\1'), /不正なエスケープシーケンス/);
+    assert.match(validateDomainName('example\\12'), /不正なエスケープシーケンス/);
 
     // illegal character
-    assert.equal(validateDomainName('example com'), 'illegal character');
-    assert.equal(validateDomainName('example\tcom'), 'illegal character');
+    assert.match(validateDomainName('example com'), /不正な文字/);
+    assert.match(validateDomainName('example\tcom'), /不正な文字/);
 });
 
 test('MQTYPEの検証と型コード変換', () => {
@@ -297,8 +297,8 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     assert.doesNotMatch(invalidType.body, /<script>/);
     assert.match(invalidUdpSize.body, /UDPメッセージサイズを入力し直してください/);
     assert.match(invalidServer.body, /DNSサーバーを選択し直してください/);
-    assert.match(invalidDomainEmptyLabel.body, /不正なドメイン名です \('foo\.\.bar' is not a legal name \(empty label\)\)/);
-    assert.match(invalidDomainLabelTooLong.body, /is not a legal name \(label too long\)/);
+    assert.match(invalidDomainEmptyLabel.body, /不正なドメイン名です \('foo\.\.bar' は無効なドメイン名です: 空のラベルが含まれています \(連続したピリオド等\)\)/);
+    assert.match(invalidDomainLabelTooLong.body, /は無効なドメイン名です: ラベルが長すぎます \(最大63バイト\)/);
 });
 
 test('UDPのTCフラグを受けるとTCP応答へ切り替える', async () => {
