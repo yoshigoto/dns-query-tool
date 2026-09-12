@@ -729,3 +729,24 @@ test('rdata-opt-truncated の生パケットで OPTION-LENGTH 超過による WA
     assert.match(html, /OPT疑似セクションとして破損しています/);
     assert.match(html, /OPTION-LENGTH \(16 バイト\) が RDATA の残り長さ \(4 バイト\) を超過しています/);
 });
+
+test('DNSサーバー解決時に権威サーバー問い合わせでタイムアウトが発生した場合、そのエラーが伝播する', async () => {
+    const mockQueryServer = async (serverAddress, name, type) => {
+        if (serverAddress === '198.41.0.4') {
+            return {
+                answers: [],
+                authorities: [{ type: 'NS', name: 'drop.anomaly.test.ldns.jp', data: 'ns.drop.anomaly.test.ldns.jp' }],
+                additionals: [
+                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '192.0.2.53' },
+                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:db8::53' }
+                ]
+            };
+        }
+        throw new Error(`${serverAddress} から UDP 応答がありませんでした。`);
+    };
+
+    await assert.rejects(
+        async () => resolveDnsServerAddress('drop.anomaly.test.ldns.jp', false, 0, mockQueryServer),
+        /UDP 応答がありませんでした/
+    );
+});

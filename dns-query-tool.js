@@ -1568,15 +1568,20 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
 
     for (let depth = 0; depth < 20; depth++) {
         let response;
+        let lastError;
         for (const nameServer of nameServers) {
             try {
                 response = await queryServer(nameServer, queryName, queryType);
                 break;
             } catch (error) {
+                lastError = error;
                 // 同じ委任先の次の権威サーバーを試す。
             }
         }
         if (!response) {
+            if (lastError) {
+                throw lastError;
+            }
             throw new Error('権威サーバーからDNSサーバー名を解決できませんでした。');
         }
 
@@ -1610,15 +1615,20 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
         }
         if (glueAddresses.length === 0) {
             let resolvedNameServerAddress;
+            let lastSubError;
             for (const delegatedName of delegatedNames) {
                 try {
                     resolvedNameServerAddress = await resolveDnsServerAddress(delegatedName, preferIpv6, resolutionDepth + 1, queryServer);
                     break;
                 } catch (error) {
+                    lastSubError = error;
                     // 他の委任先NSの名前解決を試す。
                 }
             }
             if (!resolvedNameServerAddress) {
+                if (lastSubError) {
+                    throw lastSubError;
+                }
                 throw new Error(`委任先 ${delegatedZone} のIPアドレスを取得できませんでした。`);
             }
             nameServers = [resolvedNameServerAddress];
@@ -2003,6 +2013,7 @@ const server = http.createServer(async (req, res) => {
         // タイムアウト処理 (5秒間応答がない場合は通信を打ち切る)
         const timeoutId = setTimeout(() => {
             if (!isResponded) {
+                isResponded = true;
                 html += `<div class="result error"><p>タイムアウト: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答がありませんでした。</p>`;
                 if (qnameMinimisation) {
                     const resetQMiniHtml = addLinkToDisplayData(parsedUrl.origin, parsedUrl.pathname, 'a.root-servers.net', domainName, queryType, recursionDesired, checkingDisabled,
