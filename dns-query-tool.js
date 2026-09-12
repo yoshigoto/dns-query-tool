@@ -107,7 +107,7 @@ const getOptPseudoSectionStatusHtml = (response) => {
                 const infoCode = data.readUInt16BE(0);
                 if (infoCode === 22) {
                     malformed = true;
-                    reasons.push('EDE (OPTION 15) が BADTRUNC を示しており、一般的な OPT 疑似セクションとして破損しています');
+                    reasons.push('EDE (OPTION 15) が BADTRUNC を示しており、DNSメッセージの本来の姿から乖離しています');
                 }
             }
         }
@@ -119,7 +119,7 @@ const getOptPseudoSectionStatusHtml = (response) => {
 
     const uniqueReasons = [...new Set(reasons)].filter(Boolean);
     const reasonText = uniqueReasons.length > 0 ? uniqueReasons.join(' / ') : 'OPT 疑似セクションの内部データが不完全です';
-    return `<p style="color: red; margin: 0;">OPT疑似セクションとして壊れています: <code>${escapeHtml(reasonText)}</code></p>`;
+    return `<p style="color: red; margin: 0;">OPT疑似セクションとして破損しています: <code>${escapeHtml(reasonText)}</code></p>`;
 };
 
 const getNegativeCacheHtml = (response) => {
@@ -578,11 +578,6 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += '</ul>';
     }
 
-    const optPseudoSectionStatusHtml = getOptPseudoSectionStatusHtml(response);
-    if (optPseudoSectionStatusHtml) {
-        html += optPseudoSectionStatusHtml;
-    }
-
     // Authorityが返ってきた場合
     html += `<p><strong>AUTHORITY SECTION (${response.authorities.length} 個) :</strong></p>`;
     if (response.authorities && response.authorities.length > 0) {
@@ -799,6 +794,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         }
     } else {
         html += '<p style="color: orange; margin: 0;">追加の情報は見つかりませんでした。</p>';
+    }
+
+    const warningHtml = getOptPseudoSectionStatusHtml(response);
+    if (warningHtml) {
+        html += `<p><strong>WARNING SECTION:</strong></p>`;
+        html += `<div style="border-left: 4px solid #ff8c00; padding-left: 10px; color: #8a4b00;">${warningHtml}</div>`;
     }
 
     html += '</div>';

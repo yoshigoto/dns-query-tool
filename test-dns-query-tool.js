@@ -246,6 +246,35 @@ test('OPT疑似セクションが一般的に破損している場合を表示�
     assert.match(html, /OPT疑似セクション.*破損|一般的な OPT 疑似セクションとして破損/);
 });
 
+test('WARNING SECTIONを最後に出して、構造は解釈できるが異常な応答を示す', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'SERVFAIL',
+        questions: [{ name: 'rdata-opt-truncated.anomaly.test.ldns.jp', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: [{
+            type: 'OPT',
+            name: '.',
+            udpPayloadSize: 512,
+            flags: dnsPacket.DNSSEC_OK,
+            options: [{
+                code: 15,
+                data: Buffer.concat([
+                    Buffer.from([0, 22]),
+                    Buffer.from('At delegation anomaly.test.ldns.jp for rdata-opt-truncated.anomaly.test.ldns.jp/a')
+                ])
+            }]
+        }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 100,
+    true, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /WARNING SECTION/);
+    assert.match(html, /BADTRUNC|本来の姿から乖離/);
+    assert.ok(html.lastIndexOf('WARNING SECTION') > html.lastIndexOf('OPT PSEUDOSECTION'));
+});
+
 test('応答内のMQTYPE-Queryと予約TYPEを検出する', () => {
     const render = (data) => makeHtmlFromDns({
         id: 100,
