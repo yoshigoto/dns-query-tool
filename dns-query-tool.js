@@ -74,6 +74,54 @@ const getResponseRcode = (response) => {
     return RCODE_NAMES[rcodeNumber] || `RCODE_${rcodeNumber}`;
 };
 
+const getOptPseudoSectionStatusHtml = (response) => {
+    const optRecords = (response.additionals || []).filter(record => record.type === 'OPT' && record.name === '.');
+    if (optRecords.length === 0) {
+        return '';
+    }
+
+    let malformed = false;
+    let reasons = [];
+
+    for (const record of optRecords) {
+        const options = Array.isArray(record.options) ? record.options : [];
+        if (options.length === 0) {
+            continue;
+        }
+
+        for (const option of options) {
+            if (!option || typeof option !== 'object') {
+                malformed = true;
+                reasons.push('OPT レコードの OPTION が不正です');
+                continue;
+            }
+
+            const data = option.data;
+            if (typeof option.code !== 'number') {
+                malformed = true;
+                reasons.push('OPTION コードが不正です');
+                continue;
+            }
+
+            if (option.code === 15 && Buffer.isBuffer(data) && data.length >= 2) {
+                const infoCode = data.readUInt16BE(0);
+                if (infoCode === 22) {
+                    malformed = true;
+                    reasons.push('EDE (OPTION 15) が BADTRUNC を示しており、一般的な OPT 疑似セクションとして破損しています');
+                }
+            }
+        }
+    }
+
+    if (!malformed) {
+        return '';
+    }
+
+    const uniqueReasons = [...new Set(reasons)].filter(Boolean);
+    const reasonText = uniqueReasons.length > 0 ? uniqueReasons.join(' / ') : 'OPT 疑似セクションの内部データが不完全です';
+    return `<p style="color: red; margin: 0;">OPT疑似セクションとして壊れています: <code>${escapeHtml(reasonText)}</code></p>`;
+};
+
 const getNegativeCacheHtml = (response) => {
     if (response.authorities && response.authorities.length > 0) {
         const soaRecord = response.authorities.find(at => at.type === 'SOA');
@@ -528,6 +576,11 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             html += `<li><span style="color: #dd0000;"><strong>[${answerType}]</strong> ${escapeHtml(answer.name)}</span> &rarr; <code>${displayData}</code> (TTL: ${parseInt(answer.ttl, 10)}秒)</li>`;
         });
         html += '</ul>';
+    }
+
+    const optPseudoSectionStatusHtml = getOptPseudoSectionStatusHtml(response);
+    if (optPseudoSectionStatusHtml) {
+        html += optPseudoSectionStatusHtml;
     }
 
     // Authorityが返ってきた場合
