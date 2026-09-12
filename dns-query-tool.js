@@ -566,13 +566,13 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     return html;
 };
 
-const analyzeDnsPacketError = (rawBuf, originalError) => {
+const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
     if (!Buffer.isBuffer(rawBuf) || rawBuf.length === 0) {
         return '<p>メッセージデータが存在しないか空です。</p>';
     }
 
     let buf = rawBuf;
-    if (rawBuf.length >= 2 && ((rawBuf.readUInt16BE(0) + 2) === rawBuf.length)) {
+    if (tcpFramed || (originalError && rawBuf.length >= 2 && ((rawBuf.readUInt16BE(0) + 2) === rawBuf.length))) {
         buf = rawBuf.subarray(2);
     }
 
@@ -713,7 +713,26 @@ const analyzeDnsPacketError = (rawBuf, originalError) => {
         }
 
         if (offset < buf.length) {
-            throw new Error(`ヘッダーで指定されたすべてのセクション (${qdcount + ancount + nscount + arcount} 個) を解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
+            const declaredResourceRecordCount = ancount + nscount + arcount;
+            let actualResourceRecordCount = declaredResourceRecordCount;
+            let extraOffset = offset;
+
+            while (extraOffset < buf.length) {
+                const { nextOffset } = readName(buf, extraOffset);
+                extraOffset = nextOffset;
+                if (extraOffset + 10 > buf.length) {
+                    throw new Error(`ヘッダーで指定されたすべてのセクションを解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
+                }
+                const rdlength = buf.readUInt16BE(extraOffset + 8);
+                extraOffset += 10;
+                if (extraOffset + rdlength > buf.length) {
+                    throw new Error(`ヘッダーで指定されたすべてのセクションを解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
+                }
+                extraOffset += rdlength;
+                actualResourceRecordCount++;
+            }
+
+            throw new Error(`ヘッダー宣言のリソースレコード総数 (ANCOUNT + NSCOUNT + ARCOUNT: ${declaredResourceRecordCount} 個) に対し、実際のリソースレコードは ${actualResourceRecordCount} 個です。ANCOUNT、NSCOUNT、ARCOUNT のいずれかが実際の件数より小さく、${actualResourceRecordCount - declaredResourceRecordCount} 個の余剰レコードがあります`);
         }
     } catch (e) {
         anomalyReason = e.message;
@@ -721,6 +740,8 @@ const analyzeDnsPacketError = (rawBuf, originalError) => {
 
     if (anomalyReason) {
         html += `<li><strong>異常理由:</strong> <span style="color: red;">${escapeHtml(anomalyReason)}</span></li>`;
+    } else if (!originalError) {
+        return '';
     } else {
         html += `<li><strong>異常理由:</strong> メッセージ構造の走査では問題が検出されませんでした (${escapeHtml(originalError ? originalError.message : '未知のエラー')})。</li>`;
     }
@@ -1413,11 +1434,15 @@ const server = http.createServer(async (req, res) => {
                 clearTimeout(timeoutId);
                 try {
                     const response = dnsPacket.streamDecode(receivedBuffer);
+                    const anomalyHtml = analyzeDnsPacketError(receivedBuffer, null, true);
+                    if (anomalyHtml) {
+                        throw new Error('ヘッダーのセクション件数と実際のリソースレコード数が一致しません');
+                    }
                     const bytesRead = dnsPacket.streamDecode.bytes;
                     resultHtml += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
                         sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType);
                 } catch (err) {
-                    html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err)}</div>`;
+                    html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err, true)}</div>`;
                 } finally {
                     tcpClient.end();	// AWS (Route 53) は、TCPリソース解放をすぐに行う目的で DNSデータの送信後に RSTを送ってくるので、end() では read ECONNRESET が発生してしまうが、あえてこのようにしている
                 }
@@ -1478,6 +1503,10 @@ const server = http.createServer(async (req, res) => {
 
             try {
                 const response = dnsPacket.decode(msg);
+                const anomalyHtml = analyzeDnsPacketError(msg);
+                if (anomalyHtml) {
+                    throw new Error('ヘッダーのセクション件数と実際のリソースレコード数が一致しません');
+                }
                 const bytesRead = dnsPacket.decode.bytes;
                 html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
                     sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType);

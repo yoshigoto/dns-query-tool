@@ -239,3 +239,48 @@ test('analyzeDnsPacketError が QDCOUNT 不一致などのアノマリーメッ�
     const shortTcpBuf = Buffer.from([0x00, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05]); // TCP 2バイト長ヘッダー(5) + 5バイトのDNSデータ
     assert.match(analyzeDnsPacketError(shortTcpBuf, new Error('short tcp')), /最小長 \(12 バイト\) 未満です/);
 });
+
+test('ヘッダー宣言数を超えるリソースレコードを検出する', () => {
+    const cases = [
+        {
+            section: 'answers',
+            countOffset: 6,
+            records: [
+                { name: 'example.com', type: 'A', class: 'IN', ttl: 60, data: '192.0.2.1' },
+                { name: 'example.com', type: 'A', class: 'IN', ttl: 60, data: '192.0.2.2' }
+            ]
+        },
+        {
+            section: 'authorities',
+            countOffset: 8,
+            records: [
+                { name: 'example.com', type: 'NS', class: 'IN', ttl: 60, data: 'ns1.example.com' },
+                { name: 'example.com', type: 'NS', class: 'IN', ttl: 60, data: 'ns2.example.com' }
+            ]
+        },
+        {
+            section: 'additionals',
+            countOffset: 10,
+            records: [
+                { name: 'ns1.example.com', type: 'A', class: 'IN', ttl: 60, data: '192.0.2.1' },
+                { name: 'ns2.example.com', type: 'A', class: 'IN', ttl: 60, data: '192.0.2.2' }
+            ]
+        }
+    ];
+
+    for (const { section, countOffset, records } of cases) {
+        const packet = dnsPacket.encode({
+            type: 'response',
+            id: 100,
+            questions: [{ name: 'example.com', type: 'A', class: 'IN' }],
+            [section]: records
+        });
+        packet.writeUInt16BE(1, countOffset);
+
+        const resultHtml = analyzeDnsPacketError(packet);
+
+        assert.match(resultHtml, /ANCOUNT \+ NSCOUNT \+ ARCOUNT: 1 個/);
+        assert.match(resultHtml, /実際のリソースレコードは 2 個/);
+        assert.match(resultHtml, /1 個の余剰レコード/);
+    }
+});
