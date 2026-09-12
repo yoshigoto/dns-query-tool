@@ -406,7 +406,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += `<li>応答したサーバー: <code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></li>`;
     html += `<li>クエリーID: <code>${queryId} (${response.id === queryId ? '一致' : '<span style="color: red;">不一致</span>'})</code></li>`;
     const opcodeStr = getOpcodeName(response);
-    html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: orange;">(QUERY以外のOpcodeです)</span>' : ''}</li>`;
+    html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: orange;">(QUERY 以外の Opcode です)</span>' : ''}</li>`;
     if (response.type === 'query') {
         html += `<li style="color: orange;">QR: <code>0 (Query)</code> - 応答メッセージですが QR ビットが 0 (Query) になっています</li>`;
     }

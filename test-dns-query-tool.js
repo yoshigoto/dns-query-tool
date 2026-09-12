@@ -529,7 +529,7 @@ test('Opcode, QR(0), Reserved(Z) フラグを解析・表示する', () => {
     false, false, false, false, '1232', false, '', false, 255, 'A');
 
     assert.match(html, /Opcode: <code>NOTIFY<\/code>/);
-    assert.match(html, /QUERY以外のOpcodeです/);
+    assert.match(html, /QUERY 以外の Opcode です/);
     assert.match(html, /QR: <code>0 \(Query\)<\/code>/);
     assert.match(html, /<span title="Reserved">Z<\/span>/);
 });
