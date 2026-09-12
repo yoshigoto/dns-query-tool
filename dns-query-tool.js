@@ -390,28 +390,47 @@ const decodeResourceRecord = (type, msg) => {
         displayData = `order: ${msg.order}, preference: ${msg.preference}, flags: ${msg.flags}, services: ${msg.services}, regexp: ${msg.regexp}, replacement: ${msg.replacement}`;
     } else if (replaceUnknownRrTypeToKnown(type) === 'SVCB' || replaceUnknownRrTypeToKnown(type) === 'HTTPS' ) {
         let offset = 0;
+        if (!Buffer.isBuffer(msg) || msg.length < 3) {
+            return escapeHtml('malformed SVCB/HTTPS RDATA');
+        }
         const priority = msg.readUInt16BE(offset);
         offset += 2;
 
         let startOffset = offset;
         const labels = [];
-        while (true) {
+        let targetNameTerminated = false;
+        while (startOffset < msg.length) {
             const len = msg[startOffset];
             startOffset += 1;
-            if (len === 0) break; // ヌルバイトで終了
+            if (len === 0) {
+                targetNameTerminated = true;
+                break; // ヌルバイトで終了
+            }
+            if (len > 63 || startOffset + len > msg.length) {
+                return escapeHtml('malformed SVCB/HTTPS TargetName');
+            }
             const label = msg.toString('utf8', startOffset, startOffset + len);
             labels.push(label);
             startOffset += len;
+        }
+        if (!targetNameTerminated) {
+            return escapeHtml('malformed SVCB/HTTPS TargetName');
         }
         const domainName = labels.length === 0 ? '.' : labels.join('.') + '.';
 
         offset += startOffset - offset;
         let paramString = '';
         while (offset < msg.length) {
+            if (offset + 4 > msg.length) {
+                return escapeHtml('malformed SVCB/HTTPS SvcParam');
+            }
             const paramKey = msg.readUInt16BE(offset);
             offset += 2;
             const paramLen = msg.readUInt16BE(offset);
             offset += 2;
+            if (offset + paramLen > msg.length) {
+                return escapeHtml('malformed SVCB/HTTPS SvcParam');
+            }
             const paramValBuffer = msg.subarray(offset, offset + paramLen);
             offset += paramLen;
             switch (paramKey) {
@@ -1002,6 +1021,39 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
                     }
                 }
                 rOffset += 1 + txtLen;
+            }
+        } else if (type === 64 || type === 65) {
+            const recordType = type === 64 ? 'SVCB' : 'HTTPS';
+            if (rdataBuf.length < 3) {
+                throw new Error(`${sectionName} (${escapeHtml(name)}) の ${recordType} レコードの RDATA が短すぎます`);
+            }
+
+            let rOffset = 2;
+            while (true) {
+                if (rOffset >= rdataBuf.length) {
+                    throw new Error(`${sectionName} (${escapeHtml(name)}) の ${recordType} レコードの TargetName に終端ラベルがありません`);
+                }
+                const labelLength = rdataBuf[rOffset++];
+                if (labelLength === 0) break;
+                if (labelLength > 63) {
+                    throw new Error(`${sectionName} (${escapeHtml(name)}) の ${recordType} レコードの TargetName のラベル長 (${labelLength} バイト) が RFC 1035 の最大長 (63 バイト) を超えています`);
+                }
+                if (rOffset + labelLength > rdataBuf.length) {
+                    throw new Error(`${sectionName} (${escapeHtml(name)}) の ${recordType} レコードの TargetName のラベル長 (${labelLength} バイト) が残りの RDATA 長 (${rdataBuf.length - rOffset} バイト) を超過しています`);
+                }
+                rOffset += labelLength;
+            }
+
+            while (rOffset < rdataBuf.length) {
+                if (rOffset + 4 > rdataBuf.length) {
+                    throw new Error(`${sectionName} (${escapeHtml(name)}) の ${recordType} レコードの SvcParam ヘッダー (4 バイト) に対し、RDATA の残りが ${rdataBuf.length - rOffset} バイトしかありません`);
+                }
+                const paramLength = rdataBuf.readUInt16BE(rOffset + 2);
+                rOffset += 4;
+                if (rOffset + paramLength > rdataBuf.length) {
+                    throw new Error(`${sectionName} (${escapeHtml(name)}) の ${recordType} レコードの SvcParam の長さ (${paramLength} バイト) が残りの RDATA 長 (${rdataBuf.length - rOffset} バイト) を超過しています`);
+                }
+                rOffset += paramLength;
             }
         }
     };

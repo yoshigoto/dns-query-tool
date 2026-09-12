@@ -513,6 +513,31 @@ test('analyzeDnsPacketError が 2 つ目以降の TXT 文字列長オクテッ�
     assert.match(resultHtml, /TXT 文字列長オクテット \(10 バイト\) が残りの RDATA 長 \(4 バイト\) を超過しています/);
 });
 
+test('SVCB TargetName の RDATA 長超過を検出し、表示処理を停止させない', () => {
+    const qname = 'rdata-svcb-overflow.anomaly.test.ldns.jp';
+    const packet = dnsPacket.encode({
+        type: 'response',
+        id: 0x1234,
+        questions: [{ name: qname, type: 'SVCB', class: 'IN' }],
+        answers: [{
+            name: qname,
+            type: 'UNKNOWN_64',
+            class: 'IN',
+            ttl: 60,
+            data: Buffer.from([0, 1, 20, 0x74, 0x61, 0x72, 0x67, 0x65])
+        }]
+    });
+
+    const resultHtml = analyzeDnsPacketError(packet, new Error('Buffer overflow'));
+    assert.match(resultHtml, /SVCB レコードの TargetName のラベル長 \(20 バイト\) が残りの RDATA 長 \(5 バイト\) を超過しています/);
+
+    const response = dnsPacket.decode(packet);
+    const html = makeHtmlFromDns(response, packet.length, 'http://localhost:3000', '/api/query',
+        'ns2.ldns.jp', '160.16.111.88', qname, 'SVCB', 0x1234,
+        false, false, false, false, '1232', false, '', false, 255, 'A');
+    assert.match(html, /malformed SVCB\/HTTPS TargetName/);
+});
+
 test('ヘッダー宣言数を超えるリソースレコードを検出する', () => {
     const cases = [
         {
