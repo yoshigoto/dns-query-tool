@@ -218,7 +218,26 @@ test('EDNS optionをraw表示し、NSIDをhexで表示する', () => {
     assert.match(html, /OPTION_65001 \(65001\): \(empty\)/);
     assert.doesNotMatch(html, /�/);
 });
+test('EDNS0 の DO フラグおよび CO フラグ (Compact Answers OK) を正しく解析・表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: [{
+            type: 'OPT',
+            name: '.',
+            udpPayloadSize: 1232,
+            flags: dnsPacket.DNSSEC_OK | 0x4000,
+            options: []
+        }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    true, false, false, false, '1232', false, '', false, 255, 'A');
 
+    assert.match(html, /flags: DO CO/);
+});
 test('OPT疑似セクションが一般的に破損している場合を表示する', () => {
     const html = makeHtmlFromDns({
         id: 100,

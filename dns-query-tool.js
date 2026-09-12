@@ -6,6 +6,9 @@ const dgram = require('dgram');
 const dnsPacket = require('dns-packet');	// https://github.com/mafintosh/dns-packet
 const dnsTypes = require('dns-packet/types');
 
+const DNSSEC_OK = dnsPacket.DNSSEC_OK || 0x8000; // RFC 3225 DNSSEC OK flag
+const COMPACT_ANSWERS_OK = dnsPacket.COMPACT_ANSWERS_OK || 0x4000; // RFC 9801 Compact Answers OK flag
+
 const RCODE_NAMES = {
     0: 'NOERROR',
     1: 'FORMERR',
@@ -748,9 +751,14 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         let mQTypeResponseInvalid = false;
                         let mQTypeResponseCount = 0;
                         let mQTypeQueryFound = false;
-                        if (optRecord.flags & dnsPacket.DNSSEC_OK) {
-                            flagString = 'DO';
+                        const ednsFlags = [];
+                        if (optRecord.flags & DNSSEC_OK) {
+                            ednsFlags.push('DO');
                         }
+                        if (optRecord.flags & COMPACT_ANSWERS_OK) {
+                            ednsFlags.push('CO');
+                        }
+                        flagString = ednsFlags.join(' ');
                         for (const option of optRecord.options) {
                             const optionData = Buffer.isBuffer(option.data) ? option.data : Buffer.from(option.data || '');
                             const optionName = escapeHtml(option.type || `OPTION_${option.code}`);
@@ -1837,7 +1845,7 @@ const server = http.createServer(async (req, res) => {
             type: 'OPT',
             name: '.',
             udpPayloadSize: udpSize,
-            flags: dnssecOk ? dnsPacket.DNSSEC_OK : 0
+            flags: dnssecOk ? DNSSEC_OK : 0
         };
         if (nsidEnable) {
             const option = { code: 3, data: Buffer.alloc(0) };
