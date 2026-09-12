@@ -393,6 +393,55 @@ test('analyzeDnsPacketError が QDCOUNT 不一致などのアノマリーメッ�
     assert.match(analyzeDnsPacketError(shortTcpBuf, new Error('short tcp')), /最小長 \(12 バイト\) 未満です/);
 });
 
+test('analyzeDnsPacketError が TXT 文字列長オクテットの RDATA 長超過を検出する', () => {
+    const qname = 'rdata-txt-len-mismatch.anomaly.test.ldns.jp';
+    const packet = dnsPacket.encode({
+        type: 'response',
+        id: 0x1234,
+        questions: [{ name: qname, type: 'TXT', class: 'IN' }],
+        answers: [{
+            name: qname,
+            type: 'TXT',
+            class: 'IN',
+            ttl: 60,
+            data: Buffer.from([1, 2, 3, 4, 5])
+        }]
+    });
+    // dnsPacket.encode が生成した RDATA ([0x05, 1, 2, 3, 4, 5], rdlength = 6) の先頭バイト (txtLen) を 10 に書き換える
+    packet[packet.length - 6] = 10;
+
+    const resultHtml = analyzeDnsPacketError(packet, new Error('Buffer overflow'));
+
+    assert.match(resultHtml, /【DNSメッセージ異常の分析結果】/);
+    assert.match(resultHtml, /ANSWER SECTION \(rdata-txt-len-mismatch\.anomaly\.test\.ldns\.jp\) の TXT レコードにおいて/);
+    assert.match(resultHtml, /TXT 文字列長オクテット \(10 バイト\) が RDATA 長 \(6 バイト\) を超過しています/);
+});
+
+test('analyzeDnsPacketError が 2 つ目以降の TXT 文字列長オクテットの残りの RDATA 長超過を検出する', () => {
+    const qname = 'rdata-txt-len-mismatch.anomaly.test.ldns.jp';
+    const packet = dnsPacket.encode({
+        type: 'response',
+        id: 0x1234,
+        questions: [{ name: qname, type: 'TXT', class: 'IN' }],
+        answers: [{
+            name: qname,
+            type: 'TXT',
+            class: 'IN',
+            ttl: 60,
+            data: [Buffer.from([1, 2]), Buffer.from([3, 4, 5])]
+        }]
+    });
+    // dnsPacket.encode が生成した RDATA は [0x02, 1, 2, 0x03, 3, 4, 5] (rdlength = 7)
+    // 2つ目の文字列長オクテット 0x03 (末尾から4バイト目) を 10 に書き換える
+    packet[packet.length - 4] = 10;
+
+    const resultHtml = analyzeDnsPacketError(packet, new Error('Buffer overflow'));
+
+    assert.match(resultHtml, /【DNSメッセージ異常の分析結果】/);
+    assert.match(resultHtml, /ANSWER SECTION \(rdata-txt-len-mismatch\.anomaly\.test\.ldns\.jp\) の TXT レコードにおいて/);
+    assert.match(resultHtml, /TXT 文字列長オクテット \(10 バイト\) が残りの RDATA 長 \(4 バイト\) を超過しています/);
+});
+
 test('ヘッダー宣言数を超えるリソースレコードを検出する', () => {
     const cases = [
         {

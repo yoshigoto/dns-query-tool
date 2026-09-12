@@ -834,6 +834,23 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
         return { name: labels.join('.') || '.', nextOffset: nextOff };
     };
 
+    const validateRecordRdata = (sectionName, name, type, rdataBuf) => {
+        if (type === 16) {
+            let rOffset = 0;
+            while (rOffset < rdataBuf.length) {
+                const txtLen = rdataBuf[rOffset];
+                if (rOffset + 1 + txtLen > rdataBuf.length) {
+                    if (rOffset === 0) {
+                        throw new Error(`${sectionName} (${escapeHtml(name)}) の TXT レコードにおいて、TXT 文字列長オクテット (${txtLen} バイト) が RDATA 長 (${rdataBuf.length} バイト) を超過しています`);
+                    } else {
+                        throw new Error(`${sectionName} (${escapeHtml(name)}) の TXT レコードにおいて、TXT 文字列長オクテット (${txtLen} バイト) が残りの RDATA 長 (${rdataBuf.length - rOffset} バイト) を超過しています`);
+                    }
+                }
+                rOffset += 1 + txtLen;
+            }
+        }
+    };
+
     try {
         for (let i = 0; i < qdcount; i++) {
             if (offset >= buf.length) {
@@ -856,11 +873,13 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
             if (offset + 10 > buf.length) {
                 throw new Error(`ANSWER SECTION (${escapeHtml(name)}) のヘッダー情報 (TYPE/CLASS/TTL/RDLENGTH) 読み込み中にメッセージ末尾に達しました`);
             }
+            const type = buf.readUInt16BE(offset);
             const rdlength = buf.readUInt16BE(offset + 8);
             offset += 10;
             if (offset + rdlength > buf.length) {
                 throw new Error(`ANSWER SECTION (${escapeHtml(name)}) のレコードデータ (RDLENGTH: ${rdlength} バイト) 読み込み中にメッセージ末尾に達しました`);
             }
+            validateRecordRdata('ANSWER SECTION', name, type, buf.subarray(offset, offset + rdlength));
             offset += rdlength;
         }
 
@@ -873,11 +892,13 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
             if (offset + 10 > buf.length) {
                 throw new Error(`AUTHORITY SECTION (${escapeHtml(name)}) のヘッダー情報 (TYPE/CLASS/TTL/RDLENGTH) 読み込み中にメッセージ末尾に達しました`);
             }
+            const type = buf.readUInt16BE(offset);
             const rdlength = buf.readUInt16BE(offset + 8);
             offset += 10;
             if (offset + rdlength > buf.length) {
                 throw new Error(`AUTHORITY SECTION (${escapeHtml(name)}) のレコードデータ (RDLENGTH: ${rdlength} バイト) 読み込み中にメッセージ末尾に達しました`);
             }
+            validateRecordRdata('AUTHORITY SECTION', name, type, buf.subarray(offset, offset + rdlength));
             offset += rdlength;
         }
 
@@ -890,11 +911,13 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
             if (offset + 10 > buf.length) {
                 throw new Error(`ADDITIONAL SECTION (${escapeHtml(name)}) のヘッダー情報 (TYPE/CLASS/TTL/RDLENGTH) 読み込み中にメッセージ末尾に達しました`);
             }
+            const type = buf.readUInt16BE(offset);
             const rdlength = buf.readUInt16BE(offset + 8);
             offset += 10;
             if (offset + rdlength > buf.length) {
                 throw new Error(`ADDITIONAL SECTION (${escapeHtml(name)}) のレコードデータ (RDLENGTH: ${rdlength} バイト) 読み込み中にメッセージ末尾に達しました`);
             }
+            validateRecordRdata('ADDITIONAL SECTION', name, type, buf.subarray(offset, offset + rdlength));
             offset += rdlength;
         }
 
@@ -904,16 +927,18 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
             let extraOffset = offset;
 
             while (extraOffset < buf.length) {
-                const { nextOffset } = readName(buf, extraOffset);
+                const { name, nextOffset } = readName(buf, extraOffset);
                 extraOffset = nextOffset;
                 if (extraOffset + 10 > buf.length) {
                     throw new Error(`ヘッダーで指定されたすべてのセクションを解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
                 }
+                const type = buf.readUInt16BE(extraOffset);
                 const rdlength = buf.readUInt16BE(extraOffset + 8);
                 extraOffset += 10;
                 if (extraOffset + rdlength > buf.length) {
                     throw new Error(`ヘッダーで指定されたすべてのセクションを解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
                 }
+                validateRecordRdata('EXTRA SECTION', name, type, buf.subarray(extraOffset, extraOffset + rdlength));
                 extraOffset += rdlength;
                 actualResourceRecordCount++;
             }
