@@ -168,6 +168,11 @@ const getOptPseudoSectionStatusHtml = (response, rawBuf = null) => {
     }
 
     for (const record of optRecords) {
+        if (record.extendedRcode === 22) {
+            malformed = true;
+            reasons.push('Extended RCODE が BADTRUNC (22) を示しており、DNSメッセージの本来の姿から乖離しています');
+        }
+
         const options = Array.isArray(record.options) ? record.options : [];
         if (options.length === 0) {
             continue;
@@ -185,14 +190,6 @@ const getOptPseudoSectionStatusHtml = (response, rawBuf = null) => {
                 malformed = true;
                 reasons.push('OPTION コードが不正です');
                 continue;
-            }
-
-            if (option.code === 15 && Buffer.isBuffer(data) && data.length >= 2) {
-                const infoCode = data.readUInt16BE(0);
-                if (infoCode === 22) {
-                    malformed = true;
-                    reasons.push('EDE (OPTION 15) が BADTRUNC を示しており、DNSメッセージの本来の姿から乖離しています');
-                }
             }
         }
     }

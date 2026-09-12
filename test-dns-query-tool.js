@@ -252,11 +252,8 @@ test('OPT疑似セクションが一般的に破損している場合を表示�
             udpPayloadSize: 512,
             flags: dnsPacket.DNSSEC_OK,
             options: [{
-                code: 15,
-                data: Buffer.concat([
-                    Buffer.from([0, 22]),
-                    Buffer.from('At delegation anomaly.test.ldns.jp for rdata-opt-truncated.anomaly.test.ldns.jp/a')
-                ])
+                code: 'invalid',
+                data: Buffer.from([])
             }]
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 100,
@@ -277,6 +274,7 @@ test('WARNING SECTIONを最後に出して、構造は解釈できるが異常�
             type: 'OPT',
             name: '.',
             udpPayloadSize: 512,
+            extendedRcode: 22,
             flags: dnsPacket.DNSSEC_OK,
             options: [{
                 code: 15,
