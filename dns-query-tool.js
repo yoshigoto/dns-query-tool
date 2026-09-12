@@ -39,6 +39,21 @@ const EXTENDED_RCODE_NAMES = {
     23: 'BADCOOKIE'
 };
 
+const OPCODE_NAMES = {
+    0: 'QUERY',
+    1: 'IQUERY',
+    2: 'STATUS',
+    4: 'NOTIFY',
+    5: 'UPDATE'
+};
+
+const getOpcodeName = (response) => {
+    const opcode = response.opcode;
+    if (typeof opcode === 'string') return opcode.toUpperCase();
+    if (Number.isInteger(opcode)) return OPCODE_NAMES[opcode] || `OPCODE_${opcode}`;
+    return 'QUERY';
+};
+
 const getRcodeNumber = (rcode) => {
     if (Number.isInteger(rcode)) return rcode;
     const entry = Object.entries(RCODE_NAMES).find(([, name]) => name === rcode);
@@ -57,6 +72,19 @@ const getResponseRcodeNumber = (response) => {
 const getResponseRcode = (response) => {
     const rcodeNumber = getResponseRcodeNumber(response);
     return RCODE_NAMES[rcodeNumber] || `RCODE_${rcodeNumber}`;
+};
+
+const getNegativeCacheHtml = (response) => {
+    if (response.authorities && response.authorities.length > 0) {
+        const soaRecord = response.authorities.find(at => at.type === 'SOA');
+        if (soaRecord && soaRecord.data && typeof soaRecord.data.minimum === 'number') {
+            const soaTtl = parseInt(soaRecord.ttl, 10);
+            const minimum = parseInt(soaRecord.data.minimum, 10);
+            const negTtl = Math.min(soaTtl, minimum);
+            return `<p style="color: #555555; margin: 0;">※RFC 2308 (Negative Caching): ネガティブキャッシュ有効期間 (TTL) は <code>${negTtl}秒</code> (MINIMUM: ${minimum}秒, SOA TTL: ${soaTtl}秒 の最小値) です。</p>`;
+        }
+    }
+    return '';
 };
 
 // RFC 8914 に定義されている INFO-CODE のマッピング表
@@ -212,6 +240,25 @@ const decodeResourceRecord = (type, msg) => {
         displayData = `mname: ${msg.mname}, rname: ${msg.rname}, serial: ${msg.serial}, refresh: ${msg.refresh}, retry: ${msg.retry}, expire: ${msg.expire}, minimum: ${msg.minimum}`;
     } else if (type === 'SRV') {
         displayData = `priority: ${msg.priority}, weight: ${msg.weight}, port: ${msg.port}, target: ${msg.target}`;
+    } else if (type === 'TLSA') {
+        const usageNames = { 0: 'PKIX-TA', 1: 'PKIX-EE', 2: 'DANE-TA', 3: 'DANE-EE' };
+        const selectorNames = { 0: 'Cert', 1: 'SPKI' };
+        const matchingTypeNames = { 0: 'Full', 1: 'SHA-256', 2: 'SHA-512' };
+        const usageStr = usageNames[msg.usage] !== undefined ? usageNames[msg.usage] : msg.usage;
+        const selectorStr = selectorNames[msg.selector] !== undefined ? selectorNames[msg.selector] : msg.selector;
+        const matchingTypeStr = matchingTypeNames[msg.matchingType] !== undefined ? matchingTypeNames[msg.matchingType] : msg.matchingType;
+        const certHex = Buffer.isBuffer(msg.certificate) ? msg.certificate.toString('hex') : (msg.certificate || (Buffer.isBuffer(msg.data) ? msg.data.toString('hex') : msg.data || ''));
+        displayData = `usage: ${usageStr}, selector: ${selectorStr}, matchingType: ${matchingTypeStr}, certificate: ${certHex}`;
+    } else if (type === 'SSHFP') {
+        const algoNames = { 1: 'RSA', 2: 'DSA', 3: 'ECDSA', 4: 'Ed25519' };
+        const fpTypeNames = { 1: 'SHA-1', 2: 'SHA-256' };
+        const algo = algoNames[msg.algorithm] !== undefined ? algoNames[msg.algorithm] : msg.algorithm;
+        const fpTypeVal = msg.fpType !== undefined ? msg.fpType : msg.type;
+        const fpTypeStr = fpTypeNames[fpTypeVal] !== undefined ? fpTypeNames[fpTypeVal] : fpTypeVal;
+        const fpHex = Buffer.isBuffer(msg.fingerprint) ? msg.fingerprint.toString('hex') : (msg.fingerprint || (Buffer.isBuffer(msg.data) ? msg.data.toString('hex') : msg.data || ''));
+        displayData = `algorithm: ${algo}, fpType: ${fpTypeStr}, fingerprint: ${fpHex}`;
+    } else if (type === 'NAPTR') {
+        displayData = `order: ${msg.order}, preference: ${msg.preference}, flags: ${msg.flags}, services: ${msg.services}, regexp: ${msg.regexp}, replacement: ${msg.replacement}`;
     } else if (replaceUnknownRrTypeToKnown(type) === 'SVCB' || replaceUnknownRrTypeToKnown(type) === 'HTTPS' ) {
         let offset = 0;
         const priority = msg.readUInt16BE(offset);
@@ -310,6 +357,11 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += `<li>プロトコル: <code>${sendTcp ? 'TCP' : 'UDP'}</code> / 応答サイズ: <code>${bytesRead}</code>byte</li>`;
     html += `<li>応答したサーバー: <code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></li>`;
     html += `<li>クエリーID: <code>${queryId} (${response.id === queryId ? '一致' : '<span style="color: red;">不一致</span>'})</code></li>`;
+    const opcodeStr = getOpcodeName(response);
+    html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: orange;">(QUERY以外のOpcodeです)</span>' : ''}</li>`;
+    if (response.type === 'query') {
+        html += `<li style="color: orange;">QR: <code>0 (Query)</code> - 応答メッセージですが QR ビットが 0 (Query) になっています</li>`;
+    }
 
     if (response.questions && response.questions.length > 0) {
         response.questions.forEach((question) => {
@@ -347,6 +399,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     if (response.flags & dnsPacket.CHECKING_DISABLED) {
         flagString += '<span title="Checking Disabled">CD</span> ';
     }
+    if (response.flags & 0x0040) {
+        flagString += '<span title="Reserved">Z</span> ';
+    }
     if (flagString !== '') {
         flagString = flagString.slice(0, -1);
     }
@@ -373,6 +428,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += `<p style="color: red; margin: 0;">FORMERR: DNSメッセージの形式に問題があると、応答したサーバー <code>${escapeHtml(dnsServer)}</code> が判断しました。</p>`;
     } else if (rcode === 'NXDOMAIN') {
         html += `<p style="color: red; margin: 0;">NXDOMAIN: 問い合わせたドメイン名 <code>${escapeHtml(questionName)}</code> は存在しませんでした。</p>`;
+        const negHtml = getNegativeCacheHtml(response);
+        if (negHtml) {
+            html += negHtml;
+        }
         if (qnameMinimisation) {
             if (qnamePosition > 0) {
                 qnamePosition--;
@@ -396,6 +455,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         if (!response.answers || response.answers.length === 0) {
             // rcodeはNOERRORだが、該当レコードが空 (例: AAAAを引いたがAレコードしか持っていない場合など)
             html += `<p style="color: green; margin: 0;">NOERROR: 指定されたタイプ <code>${escapeHtml(questionType)}</code> に対するレコード (回答) は見つかりませんでした。</p>`;
+            const negHtml = getNegativeCacheHtml(response);
+            if (negHtml) {
+                html += negHtml;
+            }
             if (qnameMinimisation) {
                 if (qnamePosition > 0) {
                     qnamePosition--;
@@ -529,6 +592,48 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                             if (option.code === 3) {
                                 nsidFound = true;
                                 nsidString = optionHex;
+                            } else if (option.code === 8 && Buffer.isBuffer(option.data)) {
+                                const buffer = option.data;
+                                if (buffer.length >= 4) {
+                                    const family = buffer.readUInt16BE(0);
+                                    const sourcePrefix = buffer[2];
+                                    const scopePrefix = buffer[3];
+                                    const addrBytes = buffer.subarray(4);
+                                    let addrStr = '';
+                                    if (family === 1) { // IPv4
+                                        const octets = [0, 0, 0, 0];
+                                        for (let i = 0; i < Math.min(addrBytes.length, 4); i++) {
+                                            octets[i] = addrBytes[i];
+                                        }
+                                        addrStr = octets.join('.');
+                                    } else if (family === 2) { // IPv6
+                                        const hex = Buffer.alloc(16);
+                                        addrBytes.copy(hex, 0, 0, Math.min(addrBytes.length, 16));
+                                        const hexStr = hex.toString('hex');
+                                        const blocks = [];
+                                        for (let j = 0; j < 16; j += 2) {
+                                            blocks.push(hexStr.slice(j * 2, j * 2 + 4));
+                                        }
+                                        addrStr = compressIPv6(blocks.join(':'));
+                                    } else {
+                                        addrStr = addrBytes.toString('hex');
+                                    }
+                                    const familyStr = family === 1 ? '1 (IPv4)' : family === 2 ? '2 (IPv6)' : `${family}`;
+                                    optionString += `<li><strong>[ECS]</strong> <code>family: ${familyStr}, sourcePrefix: ${sourcePrefix}, scopePrefix: ${scopePrefix}, address: ${escapeHtml(addrStr)}</code></li>`;
+                                } else {
+                                    optionString += `<li><strong>[EDNS Option]</strong> <code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`;
+                                }
+                            } else if (option.code === 10 && Buffer.isBuffer(option.data)) {
+                                const buffer = option.data;
+                                if (buffer.length >= 8) {
+                                    const clientCookie = buffer.subarray(0, 8).toString('hex');
+                                    const serverCookie = buffer.length > 8 ? buffer.subarray(8).toString('hex') : '(none)';
+                                    optionString += `<li><strong>[Cookie]</strong> <code>Client Cookie: ${clientCookie}, Server Cookie: ${serverCookie}</code></li>`;
+                                } else {
+                                    optionString += `<li><strong>[EDNS Option]</strong> <code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`;
+                                }
+                            } else if (option.code === 12 && Buffer.isBuffer(option.data)) {
+                                optionString += `<li><strong>[Padding]</strong> <code>length: ${option.data.length} bytes</code></li>`;
                             } else if (option.code === 15 && Buffer.isBuffer(option.data)) {
                                 const buffer = option.data;
                                 if (buffer.length < 2) {
@@ -978,7 +1083,7 @@ const isInvalidUdpSize = (udpSize) => {
 };
 
 const isInvalidQueryType = (queryType) => {
-    const allowedTypes = ['A', 'AAAA', 'MX', 'NS', 'SOA', 'TXT', 'CNAME', 'DNAME', 'CAA', 'DNSKEY', 'DS', 'NSEC', 'NSEC3', 'RRSIG', 'SRV', 'HTTPS', 'SVCB', 'PTR', 'PTR-x', 'ANY', 'VERSION'];
+    const allowedTypes = ['A', 'AAAA', 'MX', 'NS', 'SOA', 'TXT', 'CNAME', 'DNAME', 'CAA', 'DNSKEY', 'DS', 'NSEC', 'NSEC3', 'RRSIG', 'SRV', 'HTTPS', 'SVCB', 'PTR', 'PTR-x', 'ANY', 'VERSION', 'TLSA', 'SSHFP', 'NAPTR'];
     return !allowedTypes.includes(queryType);
 };
 

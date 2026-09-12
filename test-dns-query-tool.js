@@ -434,3 +434,118 @@ test('ヘッダー宣言数を超えるリソースレコードを検出する',
         assert.match(resultHtml, /1 個の余剰レコード/);
     }
 });
+
+test('Opcode, QR(0), Reserved(Z) フラグを解析・表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        type: 'query',
+        opcode: 'NOTIFY',
+        flags: 0x0040,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /Opcode: <code>NOTIFY<\/code>/);
+    assert.match(html, /QUERY以外のOpcodeです/);
+    assert.match(html, /QR: <code>0 \(Query\)<\/code>/);
+    assert.match(html, /<span title="Reserved">Z<\/span>/);
+});
+
+test('EDNS Option の ECS, Cookie, Padding をデコード表示する', () => {
+    const ecsIPv4Data = Buffer.from([0x00, 0x01, 24, 0, 192, 0, 2]);
+    const cookieData = Buffer.from('123456788765432100000000', 'hex');
+    const paddingData = Buffer.alloc(10);
+
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: [{
+            type: 'OPT',
+            name: '.',
+            udpPayloadSize: 1232,
+            flags: 0,
+            options: [
+                { code: 8, data: ecsIPv4Data },
+                { code: 10, data: cookieData },
+                { code: 12, data: paddingData }
+            ]
+        }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /\[ECS\]<\/strong> <code>family: 1 \(IPv4\), sourcePrefix: 24, scopePrefix: 0, address: 192\.0\.2\.0<\/code>/);
+    assert.match(html, /\[Cookie\]<\/strong> <code>Client Cookie: 1234567887654321, Server Cookie: 00000000<\/code>/);
+    assert.match(html, /\[Padding\]<\/strong> <code>length: 10 bytes<\/code>/);
+});
+
+test('RFC 2308 ネガティブキャッシュ (Negative Caching) の TTL 算出と表示を検証する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NXDOMAIN',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [{
+            name: 'example.com',
+            type: 'SOA',
+            ttl: 300,
+            data: {
+                mname: 'ns1.example.com',
+                rname: 'admin.example.com',
+                serial: 1,
+                refresh: 3600,
+                retry: 1800,
+                expire: 604800,
+                minimum: 60
+            }
+        }],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /RFC 2308 \(Negative Caching\): ネガティブキャッシュ有効期間 \(TTL\) は <code>60秒<\/code>/);
+});
+
+test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'TLSA' }],
+        answers: [
+            {
+                name: '_443._tcp.example.com',
+                type: 'TLSA',
+                ttl: 300,
+                data: { usage: 3, selector: 1, matchingType: 1, certificate: Buffer.from('abcd', 'hex') }
+            },
+            {
+                name: 'example.com',
+                type: 'SSHFP',
+                ttl: 300,
+                data: { algorithm: 4, fpType: 2, fingerprint: Buffer.from('1234', 'hex') }
+            },
+            {
+                name: 'example.com',
+                type: 'NAPTR',
+                ttl: 300,
+                data: { order: 100, preference: 10, flags: 'S', services: 'SIP+D2U', regexp: '', replacement: '_sip._udp.example.com' }
+            }
+        ],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'TLSA', 100,
+    false, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /\[TLSA\].*usage: DANE-EE, selector: SPKI, matchingType: SHA-256, certificate: abcd/);
+    assert.match(html, /\[SSHFP\].*algorithm: Ed25519, fpType: SHA-256, fingerprint: 1234/);
+    assert.match(html, /\[NAPTR\].*order: 100, preference: 10, flags: S, services: SIP\+D2U/);
+});

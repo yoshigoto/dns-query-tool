@@ -43,7 +43,7 @@
                 </div>
                 <div><label for="type" class="label-wide">クエリータイプ (type):</label>
                     <select id="type" name="type">
-                        <option value="A">A (IPv4 address)</option><option value="AAAA">AAAA (IPv6 address)</option><option value="MX">MX (Mail Exchange)</option><option value="NS">NS (Name Server)</option><option value="SOA">SOA (Start Of Authority)</option><option value="TXT">TXT (Text)</option><option value="CNAME">CNAME (Canonical Name)</option><option value="DNAME">DNAME (Delegation Name)</option><option value="CAA">CAA (Certification Authority Authorization)</option><option value="DNSKEY">DNSKEY</option><option value="DS">DS (Delegation Signer)</option><option value="NSEC">NSEC (NextSECure record)</option><option value="NSEC3">NSEC3</option><option value="RRSIG">RRSIG (Resource Record Signature)</option><option value="SRV">SRV (Service)</option><option value="HTTPS">HTTPS</option><option value="SVCB">SVCB (Service Binding)</option><option value="PTR">PTR (Pointer - 4.2.0.192.in-addr.arpa)</option><option value="PTR-x">PTR-x (Pointer - 192.0.2.4)</option><option value="ANY">ANY</option><option value="VERSION">VERSION (CHAOS/TXT/version.bind)</option>
+                        <option value="A">A (IPv4 address)</option><option value="AAAA">AAAA (IPv6 address)</option><option value="MX">MX (Mail Exchange)</option><option value="NS">NS (Name Server)</option><option value="SOA">SOA (Start Of Authority)</option><option value="TXT">TXT (Text)</option><option value="CNAME">CNAME (Canonical Name)</option><option value="DNAME">DNAME (Delegation Name)</option><option value="CAA">CAA (Certification Authority Authorization)</option><option value="DNSKEY">DNSKEY</option><option value="DS">DS (Delegation Signer)</option><option value="NSEC">NSEC (NextSECure record)</option><option value="NSEC3">NSEC3</option><option value="RRSIG">RRSIG (Resource Record Signature)</option><option value="SRV">SRV (Service)</option><option value="HTTPS">HTTPS</option><option value="SVCB">SVCB (Service Binding)</option><option value="TLSA">TLSA (DANE TLSA)</option><option value="SSHFP">SSHFP (SSH Public Key Fingerprint)</option><option value="NAPTR">NAPTR (Naming Authority Pointer)</option><option value="PTR">PTR (Pointer - 4.2.0.192.in-addr.arpa)</option><option value="PTR-x">PTR-x (Pointer - 192.0.2.4)</option><option value="ANY">ANY</option><option value="VERSION">VERSION (CHAOS/TXT/version.bind)</option>
                     </select>
                 </div>
                 <div>
@@ -146,6 +146,14 @@
                     <li>「送信」してください。</li>
                     <ul><li><a href="https://jprs.jp/glossary/index.php?ID=0084" target="_blank">名前解決</a>は入力した<a href="https://jprs.jp/glossary/index.php?ID=0158" target="_blank">フルサービスリゾルバー</a>が代わりにやってくれますので、これ以上の操作は不要です。</li></ul>
                 </ol>
+            </p>
+            <p>■<b>拡張解析機能 (RFC対応)</b>
+                <ul>
+                    <li><b>ヘッダー情報</b>: Opcode / QR / Reserved (Z) フラグ等の解析・表示</li>
+                    <li><b>RFC 2308 (Negative Caching)</b>: NXDOMAIN / NODATA 応答時のネガティブキャッシュ有効期間 (TTL) の算出・表示</li>
+                    <li><b>EDNS0 オプション解析</b>: EDNS Client Subnet (ECS, RFC 7871), DNS Cookie (RFC 7873/9018), Padding (RFC 7830), NSID (RFC 5001), EDE (RFC 8914), MQTYPE (RFC 10029) の自動デコード</li>
+                    <li><b>リソースレコード解読</b>: TLSA (RFC 6698), SSHFP (RFC 4255), NAPTR (RFC 3403), HTTPS/SVCB (RFC 9460) 等のフォーマット解読</li>
+                </ul>
             </p>
             <p>※DNSSEC検証はしません。</p>
         </section>
