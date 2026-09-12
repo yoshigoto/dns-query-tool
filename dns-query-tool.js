@@ -29,14 +29,14 @@ const RCODE_NAMES = {
 };
 
 const EXTENDED_RCODE_NAMES = {
-    1: 'BADVERS / BADSIG',
-    2: 'BADKEY',
-    3: 'BADTIME',
-    4: 'BADMODE',
-    5: 'BADNAME',
-    6: 'BADALG',
-    7: 'BADTRUNC',
-    8: 'BADCOOKIE'
+    16: 'BADVERS / BADSIG',
+    17: 'BADKEY',
+    18: 'BADTIME',
+    19: 'BADMODE',
+    20: 'BADNAME',
+    21: 'BADALG',
+    22: 'BADTRUNC',
+    23: 'BADCOOKIE'
 };
 
 const getRcodeNumber = (rcode) => {
@@ -47,11 +47,15 @@ const getRcodeNumber = (rcode) => {
     return match ? Number(match[1]) : 0;
 };
 
-const getResponseRcode = (response) => {
+const getResponseRcodeNumber = (response) => {
     const baseRcode = getRcodeNumber(response.rcode);
     const optRecord = response.additionals?.find((record) => record.type === 'OPT' && record.name === '.');
     const extendedRcode = Number.isInteger(optRecord?.extendedRcode) ? optRecord.extendedRcode : 0;
-    const rcodeNumber = (extendedRcode << 4) | baseRcode;
+    return (extendedRcode << 4) | baseRcode;
+};
+
+const getResponseRcode = (response) => {
+    const rcodeNumber = getResponseRcodeNumber(response);
     return RCODE_NAMES[rcodeNumber] || `RCODE_${rcodeNumber}`;
 };
 
@@ -590,7 +594,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                             optError = '<p style="color: red; margin: 0;">応答に MQTYPE-Query が含まれているため、RFC 10029 の形式に適合していません。</p>';
                         }
                         const extendedRcode = optRecord.extendedRcode || 0;
-                        const extendedRcodeName = EXTENDED_RCODE_NAMES[extendedRcode];
+                        const extendedRcodeName = EXTENDED_RCODE_NAMES[getResponseRcodeNumber(response)];
                         const extendedRcodeDisplay = extendedRcodeName
                             ? `${extendedRcode} (${extendedRcodeName})`
                             : `${extendedRcode}`;

@@ -92,6 +92,30 @@ test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
     assert.match(html, /Extended RCODE: 1 \(BADVERS \/ BADSIG\)/);
 });
 
+test('Extended RCODEの略称をヘッダーRCODEと合成して判定する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'FORMERR',
+        questions: [{ name: 'rcode-badkey.anomaly.test.ldns.jp', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: [{
+            type: 'OPT',
+            name: '.',
+            extendedRcode: 1,
+            version: 0,
+            udpPayloadSize: 1232,
+            flags: 0,
+            options: []
+        }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rcode-badkey.anomaly.test.ldns.jp', 'A', 100,
+    false, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /応答ステータス \(rcode\): <code>BADKEY<\/code>/);
+    assert.match(html, /Extended RCODE: 1 \(BADKEY\)/);
+});
+
 test('MQTYPE応答を表示し、形式不正を警告する', () => {
     const createResponse = (data) => ({
         id: 100,
