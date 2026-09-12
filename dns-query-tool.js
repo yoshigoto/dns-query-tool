@@ -1084,7 +1084,16 @@ const isInvalidUdpSize = (udpSize) => {
 
 const isInvalidQueryType = (queryType) => {
     const allowedTypes = ['A', 'AAAA', 'MX', 'NS', 'SOA', 'TXT', 'CNAME', 'DNAME', 'CAA', 'DNSKEY', 'DS', 'NSEC', 'NSEC3', 'RRSIG', 'SRV', 'HTTPS', 'SVCB', 'PTR', 'PTR-x', 'ANY', 'VERSION', 'TLSA', 'SSHFP', 'NAPTR'];
-    return !allowedTypes.includes(queryType);
+    if (allowedTypes.includes(queryType)) {
+        return false;
+    }
+
+    if (/^UNKNOWN_\d+$/.test(queryType)) {
+        return true;
+    }
+
+    const typeCode = dnsTypes.toType(replaceKnownToUnknownRrType(queryType));
+    return !Number.isInteger(typeCode) || typeCode < 1 || typeCode > 65535;
 };
 
 const validateDomainName = (name) => {

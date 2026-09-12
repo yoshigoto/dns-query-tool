@@ -34,7 +34,10 @@ test('DNSサーバーとUDPサイズの入力検証', () => {
 
 test('クエリータイプ、フラグ、逆引き名を正しく処理する', () => {
     assert.equal(isInvalidQueryType('A'), false);
-    assert.equal(isInvalidQueryType('AXFR'), true);
+    assert.equal(isInvalidQueryType('AXFR'), false);
+    assert.equal(isInvalidQueryType('IXFR'), false);
+    assert.equal(isInvalidQueryType('UNKNOWN_65280'), true);
+    assert.equal(isInvalidQueryType('NOT_A_TYPE'), true);
     assert.equal(buildDnsFlags(true, true), dnsPacket.RECURSION_DESIRED | dnsPacket.CHECKING_DISABLED);
     assert.equal(reverseIPv4('192.0.2.4'), '4.2.0.192');
     assert.equal(reverseIPv4('192.0.2.256'), '');
