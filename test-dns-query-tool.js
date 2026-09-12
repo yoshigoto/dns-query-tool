@@ -771,3 +771,24 @@ test('DNSサーバー解決時にTCP指定の場合も権威サーバー問い�
         /TCP 応答がありませんでした/
     );
 });
+
+test('DNSサーバー解決時にTCP指定で接続切断が発生した場合、切断エラーが伝播する', async () => {
+    const mockQueryServer = async (serverAddress, name, type, createSocket, queryOverTcp, sendTcp) => {
+        if (serverAddress === '198.41.0.4') {
+            return {
+                answers: [],
+                authorities: [{ type: 'NS', name: 'drop.anomaly.test.ldns.jp', data: 'ns.drop.anomaly.test.ldns.jp' }],
+                additionals: [
+                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '192.0.2.53' },
+                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:db8::53' }
+                ]
+            };
+        }
+        throw new Error(`${serverAddress} から TCP 接続が切断されました。`);
+    };
+
+    await assert.rejects(
+        async () => resolveDnsServerAddress('drop.anomaly.test.ldns.jp', false, 0, mockQueryServer, true),
+        /TCP 接続が切断されました/
+    );
+});

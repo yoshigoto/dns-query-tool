@@ -1498,6 +1498,11 @@ const queryAuthoritativeServerOverTcp = (serverAddress, query) => new Promise((r
     client.once('error', (error) => {
         finish(() => reject(error));
     });
+    client.once('close', (hadError) => {
+        finish(() => {
+            reject(new Error(`${serverAddress} から TCP 接続が切断されました。`));
+        });
+    });
     client.connect(53, serverAddress);
 });
 
@@ -2001,7 +2006,9 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
             finished = true;
-            if (!hadError || resultHtml !== '') {
+            if (!isResponded && resultHtml === '') {
+                html += `<div class="result error"><p>エラー: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答を受信する前に TCP 接続が切断されました。</p></div>`;
+            } else if (!hadError || resultHtml !== '') {
                 html += resultHtml;
             }
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
