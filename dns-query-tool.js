@@ -28,6 +28,17 @@ const RCODE_NAMES = {
     23: 'BADCOOKIE'
 };
 
+const EXTENDED_RCODE_NAMES = {
+    1: 'BADVERS / BADSIG',
+    2: 'BADKEY',
+    3: 'BADTIME',
+    4: 'BADMODE',
+    5: 'BADNAME',
+    6: 'BADALG',
+    7: 'BADTRUNC',
+    8: 'BADCOOKIE'
+};
+
 const getRcodeNumber = (rcode) => {
     if (Number.isInteger(rcode)) return rcode;
     const entry = Object.entries(RCODE_NAMES).find(([, name]) => name === rcode);
@@ -578,7 +589,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                             mQTypeResponseInvalid = true;
                             optError = '<p style="color: red; margin: 0;">応答に MQTYPE-Query が含まれているため、RFC 10029 の形式に適合していません。</p>';
                         }
-                        optPseudo = `<li><strong>[EDNS]</strong> <code>Extended RCODE: ${optRecord.extendedRcode || 0}, Version: ${optRecord.version || 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`;
+                        const extendedRcode = optRecord.extendedRcode || 0;
+                        const extendedRcodeName = EXTENDED_RCODE_NAMES[extendedRcode];
+                        const extendedRcodeDisplay = extendedRcodeName
+                            ? `${extendedRcode} (${extendedRcodeName})`
+                            : `${extendedRcode}`;
+                        optPseudo = `<li><strong>[EDNS]</strong> <code>Extended RCODE: ${extendedRcodeDisplay}, Version: ${optRecord.version || 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`;
                         if (nsidFound) {
                             optPseudo += `<li><strong>[NSID]</strong> <code>${nsidString || '(empty)'}</code></li>`;
                         }

@@ -89,7 +89,7 @@ test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
     false, false, false, false, '1232', false, '', false, 255, 'A');
 
     assert.match(html, /応答ステータス \(rcode\): <code>BADVERS<\/code>/);
-    assert.match(html, /Extended RCODE: 1/);
+    assert.match(html, /Extended RCODE: 1 \(BADVERS \/ BADSIG\)/);
 });
 
 test('MQTYPE応答を表示し、形式不正を警告する', () => {
