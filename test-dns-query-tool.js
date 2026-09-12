@@ -16,6 +16,7 @@ const {
     reverseIPv6,
     resolveDnsServerAddress,
     server,
+    validateDomainName,
     validateMQType
 } = require('./dns-query-tool');
 
@@ -38,6 +39,53 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
     assert.equal(reverseIPv4('192.0.2.4'), '4.2.0.192');
     assert.equal(reverseIPv4('192.0.2.256'), '');
     assert.equal(reverseIPv6('2001:db8::1'), '1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2');
+});
+
+test('RFCに基づくドメイン名の入力検証 (validateDomainName)', () => {
+    // 正常系
+    assert.equal(validateDomainName('example.com'), null);
+    assert.equal(validateDomainName('example.com.'), null);
+    assert.equal(validateDomainName('.'), null);
+    assert.equal(validateDomainName('sub.example.com'), null);
+    assert.equal(validateDomainName('_dmarc.example.com'), null);
+    assert.equal(validateDomainName('a-b-c.example.jp'), null);
+    assert.equal(validateDomainName('example\\.com'), null);
+    assert.equal(validateDomainName('example\\032com'), null);
+
+    // empty name
+    assert.equal(validateDomainName(''), 'empty name');
+    assert.equal(validateDomainName('   '), 'empty name');
+
+    // empty label (連続ピリオド、ルート以外の先頭ピリオド、複数末尾ピリオド等)
+    assert.equal(validateDomainName('..'), 'empty label');
+    assert.equal(validateDomainName('foo..bar'), 'empty label');
+    assert.equal(validateDomainName('.example.com'), 'empty label');
+    assert.equal(validateDomainName('example.com..'), 'empty label');
+    assert.equal(validateDomainName('a..'), 'empty label');
+
+    // label too long (63オクテット超)
+    const label63 = 'a'.repeat(63);
+    const label64 = 'a'.repeat(64);
+    assert.equal(validateDomainName(`${label63}.com`), null);
+    assert.equal(validateDomainName(`${label64}.com`), 'label too long');
+
+    // name too long (ワイヤ形式で255オクテット超)
+    // 63文字ラベル * 3 (各64バイト) + 57文字ラベル (58バイト) + ルート (1バイト) = 251バイト (OK)
+    const longValidDomain = `${label63}.${label63}.${label63}.${'a'.repeat(57)}`;
+    assert.equal(validateDomainName(longValidDomain), null);
+    // 63文字ラベル * 3 + 62文字ラベル = 64*3 + 63 + 1 = 256バイト (超過)
+    const longInvalidDomain = `${label63}.${label63}.${label63}.${'a'.repeat(62)}`;
+    assert.equal(validateDomainName(longInvalidDomain), 'name too long');
+
+    // bad escape sequence
+    assert.equal(validateDomainName('example\\'), 'bad escape sequence');
+    assert.equal(validateDomainName('example\\999'), 'bad escape sequence');
+    assert.equal(validateDomainName('example\\1'), 'bad escape sequence');
+    assert.equal(validateDomainName('example\\12'), 'bad escape sequence');
+
+    // illegal character
+    assert.equal(validateDomainName('example com'), 'illegal character');
+    assert.equal(validateDomainName('example\tcom'), 'illegal character');
 });
 
 test('MQTYPEの検証と型コード変換', () => {
@@ -232,12 +280,14 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     testContext.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
     const port = server.address().port;
 
-    const [staticFile, missingName, invalidType, invalidUdpSize, invalidServer] = await Promise.all([
+    const [staticFile, missingName, invalidType, invalidUdpSize, invalidServer, invalidDomainEmptyLabel, invalidDomainLabelTooLong] = await Promise.all([
         request(port, '/dnsquerytool/'),
         request(port, '/dnsquerytool/api/query'),
         request(port, '/dnsquerytool/api/query?name=example.com&type=%3Cscript%3E'),
         request(port, '/dnsquerytool/api/query?name=example.com&udpsize=511'),
-        request(port, '/dnsquerytool/api/query?name=example.com&server=127.0.0.1')
+        request(port, '/dnsquerytool/api/query?name=example.com&server=127.0.0.1'),
+        request(port, '/dnsquerytool/api/query?name=foo..bar'),
+        request(port, `/dnsquerytool/api/query?name=${'a'.repeat(64)}.com`)
     ]);
 
     assert.equal(staticFile.statusCode, 200);
@@ -247,6 +297,8 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     assert.doesNotMatch(invalidType.body, /<script>/);
     assert.match(invalidUdpSize.body, /UDPメッセージサイズを入力し直してください/);
     assert.match(invalidServer.body, /DNSサーバーを選択し直してください/);
+    assert.match(invalidDomainEmptyLabel.body, /不正なドメイン名です \('foo\.\.bar' is not a legal name \(empty label\)\)/);
+    assert.match(invalidDomainLabelTooLong.body, /is not a legal name \(label too long\)/);
 });
 
 test('UDPのTCフラグを受けるとTCP応答へ切り替える', async () => {

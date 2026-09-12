@@ -982,6 +982,100 @@ const isInvalidQueryType = (queryType) => {
     return !allowedTypes.includes(queryType);
 };
 
+const validateDomainName = (name) => {
+    if (typeof name !== 'string' || name.trim() === '') {
+        return 'empty name';
+    }
+
+    const trimmed = name.trim();
+    if (trimmed === '.') {
+        return null;
+    }
+
+    if (trimmed.startsWith('.')) {
+        return 'empty label';
+    }
+
+    let wireLength = 1; // 終端ルートラベル (0x00)
+    let currentLabelBytes = 0;
+    let inEscape = false;
+    let labelCount = 0;
+
+    for (let i = 0; i < trimmed.length; i++) {
+        const char = trimmed[i];
+
+        if (inEscape) {
+            inEscape = false;
+            if (/^[0-9]$/.test(char)) {
+                if (i + 2 >= trimmed.length || !/^[0-9]{2}$/.test(trimmed.slice(i + 1, i + 3))) {
+                    return 'bad escape sequence';
+                }
+                const num = parseInt(trimmed.slice(i, i + 3), 10);
+                if (num > 255) {
+                    return 'bad escape sequence';
+                }
+                currentLabelBytes += 1;
+                i += 2;
+            } else {
+                const charBuf = Buffer.from(char, 'utf8');
+                currentLabelBytes += charBuf.length;
+            }
+            if (currentLabelBytes > 63) {
+                return 'label too long';
+            }
+            continue;
+        }
+
+        if (char === '\\') {
+            inEscape = true;
+            continue;
+        }
+
+        if (char === '.') {
+            if (currentLabelBytes === 0) {
+                return 'empty label';
+            }
+            wireLength += 1 + currentLabelBytes;
+            if (wireLength > 255) {
+                return 'name too long';
+            }
+            currentLabelBytes = 0;
+            labelCount++;
+            continue;
+        }
+
+        const code = char.charCodeAt(0);
+        if (code <= 0x20 || code === 0x7f) {
+            return 'illegal character';
+        }
+
+        const charBuf = Buffer.from(char, 'utf8');
+        currentLabelBytes += charBuf.length;
+        if (currentLabelBytes > 63) {
+            return 'label too long';
+        }
+    }
+
+    if (inEscape) {
+        return 'bad escape sequence';
+    }
+
+    if (currentLabelBytes > 0) {
+        wireLength += 1 + currentLabelBytes;
+        labelCount++;
+    }
+
+    if (wireLength > 255) {
+        return 'name too long';
+    }
+
+    if (labelCount === 0) {
+        return 'empty label';
+    }
+
+    return null;
+};
+
 const getDnsTypeCode = (type) => {
     const normalizedType = type.trim().toUpperCase();
     if (/^\d+$/.test(normalizedType)) {
@@ -1293,6 +1387,17 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
         return;
+    }
+
+    // 対象ドメイン名のバリデーションチェック (PTR-x 以外)
+    if (queryType !== 'PTR-x') {
+        const domainValidationError = validateDomainName(domainName);
+        if (domainValidationError) {
+            html += `<div class="result error"><p>エラー: 不正なドメイン名です ('${escapeHtml(domainName)}' is not a legal name (${escapeHtml(domainValidationError)}))。</p></div>`;
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+            return;
+        }
     }
 
     // 対象DNSサーバーのチェック
@@ -1647,5 +1752,6 @@ module.exports = {
     reverseIPv6,
     resolveDnsServerAddress,
     server,
+    validateDomainName,
     validateMQType
 };
