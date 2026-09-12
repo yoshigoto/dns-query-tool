@@ -496,17 +496,34 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         const optRecord = additionals;
                         let flagString = '';
                         let nsidString = '';
+                        let nsidFound = false;
                         let edeString = '';
+                        let optionString = '';
                         let mQTypeString = '';
                         let mQTypeResponseFound = false;
                         let mQTypeResponseInvalid = false;
                         let mQTypeResponseCount = 0;
+                        let mQTypeQueryFound = false;
                         if (optRecord.flags & dnsPacket.DNSSEC_OK) {
                             flagString = 'DO';
                         }
                         for (const option of optRecord.options) {
-                            if (option.code === 3 && option.data.length > 0) {
-                                nsidString = escapeHtml(`${option.data.toString('utf-8')} (${option.data.toString('hex')})`);
+                            const optionData = Buffer.isBuffer(option.data) ? option.data : Buffer.from(option.data || '');
+                            const optionName = escapeHtml(option.type || `OPTION_${option.code}`);
+                            const optionHex = escapeHtml(optionData.toString('hex'));
+                            if (option.code === 3) {
+                                nsidFound = true;
+                                nsidString = optionHex;
+                            } else if (option.code === 15 && Buffer.isBuffer(option.data)) {
+                                const buffer = option.data;
+                                if (buffer.length < 2) {
+                                    optionString += `<li><strong>[${optionName}]</strong> <code>code: ${escapeHtml(option.code)}, data: ${optionHex}</code></li>`;
+                                    continue;
+                                }
+                            } else if (option.code === 20) {
+                                mQTypeQueryFound = true;
+                            } else if (option.code !== 21) {
+                                optionString += `<li><strong>[EDNS Option]</strong> <code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`;
                             }
                             if (option.code === 15 && Buffer.isBuffer(option.data)) {
                                 const buffer = option.data;
@@ -537,7 +554,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                                 const responseTypes = [];
                                 for (let offset = 0; offset < buffer.length; offset += 2) {
                                     const type = buffer.readUInt16BE(offset);
-                                    if (responseTypes.includes(type) || type === primaryTypeCode || type === 41 || (type >= 249 && type <= 255)) {
+                                    if (responseTypes.includes(type) || type === primaryTypeCode || type === 0 || (type >= 128 && type <= 255)) {
                                         mQTypeResponseInvalid = true;
                                     }
                                     responseTypes.push(type);
@@ -557,9 +574,16 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         if (mQTypeResponseInvalid) {
                             optError = '<p style="color: red; margin: 0;">MQTYPE-Response が RFC 10029 の形式に適合していません。</p>';
                         }
+                        if (mQTypeQueryFound) {
+                            mQTypeResponseInvalid = true;
+                            optError = '<p style="color: red; margin: 0;">応答に MQTYPE-Query が含まれているため、RFC 10029 の形式に適合していません。</p>';
+                        }
                         optPseudo = `<li><strong>[EDNS]</strong> <code>Extended RCODE: ${optRecord.extendedRcode || 0}, Version: ${optRecord.version || 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`;
-                        if (nsidString !== '') {
-                            optPseudo += `<li><strong>[NSID]</strong> <code>${nsidString}</code></li>`;
+                        if (nsidFound) {
+                            optPseudo += `<li><strong>[NSID]</strong> <code>${nsidString || '(empty)'}</code></li>`;
+                        }
+                        if (optionString !== '') {
+                            optPseudo += optionString;
                         }
                         if (edeString !== '') {
                             optPseudo += `${edeString}`;

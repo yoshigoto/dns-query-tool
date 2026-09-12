@@ -116,6 +116,56 @@ test('MQTYPE応答を表示し、形式不正を警告する', () => {
     assert.match(render(createResponse(Buffer.from([0, 28, 0]))), /RFC 10029 の形式に適合していません/);
 });
 
+test('EDNS optionをraw表示し、NSIDをhexで表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: [{
+            type: 'OPT',
+            name: '.',
+            udpPayloadSize: 1232,
+            flags: 0,
+            options: [
+                { code: 3, data: Buffer.from([0xff, 0x00, 0x41]) },
+                { code: 10, data: Buffer.from([0x01, 0x02]) },
+                { code: 65001, data: Buffer.alloc(0) }
+            ]
+        }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /\[NSID\]<\/strong> <code>ff0041<\/code>/);
+    assert.match(html, /OPTION_10 \(10\): 0102/);
+    assert.match(html, /OPTION_65001 \(65001\): \(empty\)/);
+    assert.doesNotMatch(html, /�/);
+});
+
+test('応答内のMQTYPE-Queryと予約TYPEを検出する', () => {
+    const render = (data) => makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: [{
+            type: 'OPT',
+            name: '.',
+            udpPayloadSize: 1232,
+            flags: 0,
+            options: [{ code: 20, data: Buffer.alloc(0) }, { code: 21, data }]
+        }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, '1232', false, 'AAAA', false, 255, 'A');
+
+    assert.match(render(Buffer.from([0, 0])), /MQTYPE-Query が含まれているため/);
+    assert.match(render(Buffer.from([0, 128])), /RFC 10029 の形式に適合していません/);
+});
+
 test('DNS応答内のHTMLとEDE追加テキストをエスケープする', () => {
     const render = (infoCode) => makeHtmlFromDns({
         id: 100,
