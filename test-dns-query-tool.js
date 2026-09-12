@@ -750,3 +750,24 @@ test('DNSサーバー解決時に権威サーバー問い合わせでタイム�
         /UDP 応答がありませんでした/
     );
 });
+
+test('DNSサーバー解決時にTCP指定の場合も権威サーバー問い合わせのタイムアウトエラーが伝播する', async () => {
+    const mockQueryServer = async (serverAddress, name, type, createSocket, queryOverTcp, sendTcp) => {
+        if (serverAddress === '198.41.0.4') {
+            return {
+                answers: [],
+                authorities: [{ type: 'NS', name: 'drop.anomaly.test.ldns.jp', data: 'ns.drop.anomaly.test.ldns.jp' }],
+                additionals: [
+                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '192.0.2.53' },
+                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:db8::53' }
+                ]
+            };
+        }
+        throw new Error(`${serverAddress} から TCP 応答がありませんでした。`);
+    };
+
+    await assert.rejects(
+        async () => resolveDnsServerAddress('drop.anomaly.test.ldns.jp', false, 0, mockQueryServer, true),
+        /TCP 応答がありませんでした/
+    );
+});

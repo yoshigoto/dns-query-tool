@@ -1502,13 +1502,17 @@ const queryAuthoritativeServerOverTcp = (serverAddress, query) => new Promise((r
 });
 
 const queryAuthoritativeServer = (serverAddress, name, type, createSocket = dgram.createSocket,
-    queryOverTcp = queryAuthoritativeServerOverTcp) => new Promise((resolve, reject) => {
-    const client = createSocket(net.isIP(serverAddress) === 6 ? 'udp6' : 'udp4');
+    queryOverTcp = queryAuthoritativeServerOverTcp, sendTcp = false) => new Promise((resolve, reject) => {
     const query = {
         type: 'query',
         id: Math.floor(Math.random() * 65535),
         questions: [{ name, type, class: 'IN' }]
     };
+    if (sendTcp) {
+        queryOverTcp(serverAddress, query).then(resolve, reject);
+        return;
+    }
+    const client = createSocket(net.isIP(serverAddress) === 6 ? 'udp6' : 'udp4');
     const packet = dnsPacket.encode(query);
     const timeoutId = setTimeout(() => {
         client.close();
@@ -1544,19 +1548,23 @@ const queryAuthoritativeServer = (serverAddress, name, type, createSocket = dgra
 });
 
 const resolveDnsServerAddress = async (dnsServer, preferIpv6, resolutionDepth = 0,
-    queryServer = queryAuthoritativeServer) => {
+    queryServer = queryAuthoritativeServer, sendTcp = false) => {
     try {
-        return await resolveDnsServerAddressByType(dnsServer, preferIpv6, resolutionDepth, queryServer);
+        return await resolveDnsServerAddressByType(dnsServer, preferIpv6, resolutionDepth, queryServer, sendTcp);
     } catch (error) {
         if (preferIpv6) {
             throw error;
         }
-        return resolveDnsServerAddressByType(dnsServer, true, resolutionDepth, queryServer);
+        try {
+            return await resolveDnsServerAddressByType(dnsServer, true, resolutionDepth, queryServer, sendTcp);
+        } catch (subError) {
+            throw error;
+        }
     }
 };
 
 const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDepth = 0,
-    queryServer = queryAuthoritativeServer) => {
+    queryServer = queryAuthoritativeServer, sendTcp = false) => {
     if (net.isIP(dnsServer)) return dnsServer;
     if (resolutionDepth >= 5) {
         throw new Error('DNSサーバー名の解決で入れ子の委任が上限を超えました。');
@@ -1571,7 +1579,7 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
         let lastError;
         for (const nameServer of nameServers) {
             try {
-                response = await queryServer(nameServer, queryName, queryType);
+                response = await queryServer(nameServer, queryName, queryType, dgram.createSocket, queryAuthoritativeServerOverTcp, sendTcp);
                 break;
             } catch (error) {
                 lastError = error;
@@ -1618,7 +1626,7 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
             let lastSubError;
             for (const delegatedName of delegatedNames) {
                 try {
-                    resolvedNameServerAddress = await resolveDnsServerAddress(delegatedName, preferIpv6, resolutionDepth + 1, queryServer);
+                    resolvedNameServerAddress = await resolveDnsServerAddress(delegatedName, preferIpv6, resolutionDepth + 1, queryServer, sendTcp);
                     break;
                 } catch (error) {
                     lastSubError = error;
@@ -1760,7 +1768,7 @@ const server = http.createServer(async (req, res) => {
 
     let dnsServerAddress;
     try {
-        dnsServerAddress = await resolveDnsServerAddress(dnsServer, sendIpv6);
+        dnsServerAddress = await resolveDnsServerAddress(dnsServer, sendIpv6, 0, queryAuthoritativeServer, sendTcp);
     } catch (error) {
         html += `<div class="result error"><p>エラー: DNSサーバー名を解決できませんでした: ${escapeHtml(error.message)}</p></div>`;
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
