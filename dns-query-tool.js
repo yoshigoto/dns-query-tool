@@ -481,6 +481,13 @@ const buildWarningSectionHtml = (warningHtml) => {
     return `<p><strong>WARNING SECTION:</strong></p><div style="border-left: 4px solid #ff8c00; padding-left: 10px; color: #8a4b00;">${warningHtml}</div>`;
 };
 
+const wrapSectionNoticeHtml = (noticeHtml) => {
+    if (!noticeHtml || !String(noticeHtml).trim()) {
+        return '';
+    }
+    return `<div style="border-left: 4px solid #ff8c00; padding-left: 10px; color: #8a4b00;">${noticeHtml}</div>`;
+};
+
 const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsServerIp, domainName, queryType, queryId, recursionDesired, checkingDisabled,
     sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, packetWarningHtml = '', rawBuf = null) => {
     let html = '';
@@ -551,22 +558,23 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
 
     // Answerセクションについて応答コードに応じた条件分岐
     html += `<p><strong style="color: ${response.answers.length > 0 ? '#dd0000' : '#0000dd'};">ANSWER SECTION (${response.answers.length} 個) :</strong></p>`;
+    let answerNoticeHtml = '';
     if (rcode === 'SERVFAIL') {
-        html += `<p style="color: red; margin: 0;">SERVFAIL: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> で一時的なエラーが発生したか、設定に問題があります。</p>`;
+        answerNoticeHtml += `<p style="color: red; margin: 0;">SERVFAIL: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> で一時的なエラーが発生したか、設定に問題があります。</p>`;
         if (recursionDesired && !checkingDisabled) {
             const displayData = addLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, true,
                 sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-            html += `<p style="color: orange; margin: 0;">※DNSSEC検証に失敗した可能性があります。${displayData} をクリックしてみてください。</p>`;
+            answerNoticeHtml += `<p style="color: orange; margin: 0;">※DNSSEC検証に失敗した可能性があります。${displayData} をクリックしてみてください。</p>`;
         }
     } else if (rcode === 'REFUSED') {
-        html += `<p style="color: red; margin: 0;">REFUSED: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> のポリシーによりクエリーが拒否されました。</p>`;
+        answerNoticeHtml += `<p style="color: red; margin: 0;">REFUSED: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> のポリシーによりクエリーが拒否されました。</p>`;
     } else if (rcode === 'FORMERR') {
-        html += `<p style="color: red; margin: 0;">FORMERR: DNSメッセージの形式に問題があると、応答したサーバー <code>${escapeHtml(dnsServer)}</code> が判断しました。</p>`;
+        answerNoticeHtml += `<p style="color: red; margin: 0;">FORMERR: DNSメッセージの形式に問題があると、応答したサーバー <code>${escapeHtml(dnsServer)}</code> が判断しました。</p>`;
     } else if (rcode === 'NXDOMAIN') {
-        html += `<p style="color: red; margin: 0;">NXDOMAIN: 問い合わせたドメイン名 <code>${escapeHtml(questionName)}</code> は存在しませんでした。</p>`;
+        answerNoticeHtml += `<p style="color: red; margin: 0;">NXDOMAIN: 問い合わせたドメイン名 <code>${escapeHtml(questionName)}</code> は存在しませんでした。</p>`;
         const negHtml = getNegativeCacheHtml(response);
         if (negHtml) {
-            html += negHtml;
+            answerNoticeHtml += negHtml;
         }
         if (qnameMinimisation) {
             if (qnamePosition > 0) {
@@ -577,10 +585,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                     const soaRr = response.authorities.find(at => at.type === 'SOA');
                     if (soaRr) {
                         if (soaRr.name !== questionName) {
-                            html += `<p style="color: red; margin: 0;">※応答したサーバー <code>${escapeHtml(dnsServer)}</code> が RFC 8020 に対応していないようです。</p>`;
-                            html += `<p style="color: orange; margin: 0;">※Empty Non-Terminal かもしれません。${displayData} をクリックしてみてください。</p>`;
+                            answerNoticeHtml += `<p style="color: red; margin: 0;">※応答したサーバー <code>${escapeHtml(dnsServer)}</code> が RFC 8020 に対応していないようです。</p>`;
+                            answerNoticeHtml += `<p style="color: orange; margin: 0;">※Empty Non-Terminal かもしれません。${displayData} をクリックしてみてください。</p>`;
                         } else {
-                            html += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
+                            answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
                         }
                     }
                 }
@@ -590,10 +598,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         // 正常応答の場合
         if (!response.answers || response.answers.length === 0) {
             // rcodeはNOERRORだが、該当レコードが空 (例: AAAAを引いたがAレコードしか持っていない場合など)
-            html += `<p style="color: green; margin: 0;">NOERROR: 指定されたタイプ <code>${escapeHtml(questionType)}</code> に対するレコード (回答) は見つかりませんでした。</p>`;
+            answerNoticeHtml += `<p style="color: green; margin: 0;">NOERROR: 指定されたタイプ <code>${escapeHtml(questionType)}</code> に対するレコード (回答) は見つかりませんでした。</p>`;
             const negHtml = getNegativeCacheHtml(response);
             if (negHtml) {
-                html += negHtml;
+                answerNoticeHtml += negHtml;
             }
             if (qnameMinimisation) {
                 if (qnamePosition > 0) {
@@ -604,9 +612,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         const soaRr = response.authorities.find(at => at.type === 'SOA');
                         if (soaRr) {
                             if (soaRr.name !== questionName) {
-                                html += `<p style="color: orange; margin: 0;">※Empty Non-Terminal かもしれません。${displayData} をクリックしてみてください。</p>`;
+                                answerNoticeHtml += `<p style="color: orange; margin: 0;">※Empty Non-Terminal かもしれません。${displayData} をクリックしてみてください。</p>`;
                             } else {
-                                html += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
+                                answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
                             }
                         }
                     }
@@ -614,7 +622,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             }
         }
     } else {
-        html += `<p style="color: gray; margin: 0;">その他の応答コード: ${escapeHtml(rcode)}</p>`;
+        answerNoticeHtml += `<p style="color: gray; margin: 0;">その他の応答コード: ${escapeHtml(rcode)}</p>`;
+    }
+    if (answerNoticeHtml) {
+        html += wrapSectionNoticeHtml(answerNoticeHtml);
     }
     if (response.answers && response.answers.length > 0) {
         html += '<ul>';
@@ -689,7 +700,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         });
         html += '</ul>';
     } else {
-        html += '<p style="color: orange; margin: 0;">権威サーバーの情報は見つかりませんでした。</p>';
+        html += wrapSectionNoticeHtml('<p style="color: orange; margin: 0;">権威サーバーの情報は見つかりませんでした。</p>');
     }
 
     // Additionalが返ってきた場合
@@ -872,16 +883,16 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += '</ul>';
         if (optPseudo.length > 0) {
             if (response.additionals.length === 1) {
-                html += '<p style="color: orange; margin: 0;">追加の情報は見つかりませんでしたがオプション情報が見つかりました。</p>';
+                html += wrapSectionNoticeHtml('<p style="color: orange; margin: 0;">追加の情報は見つかりませんでしたがオプション情報が見つかりました。</p>');
             }
             html += `<p><strong>OPT PSEUDOSECTION:</strong></p>`;
             html += `<ul>${optPseudo}</ul>`;
             if (optError.length > 0) {
-                html += optError;
+                html += wrapSectionNoticeHtml(optError);
             }
         }
     } else {
-        html += '<p style="color: orange; margin: 0;">追加の情報は見つかりませんでした。</p>';
+        html += wrapSectionNoticeHtml('<p style="color: orange; margin: 0;">追加の情報は見つかりませんでした。</p>');
     }
 
     const warningHtml = getOptPseudoSectionStatusHtml(response, rawBuf);
