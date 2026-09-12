@@ -566,6 +566,168 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     return html;
 };
 
+const analyzeDnsPacketError = (rawBuf, originalError) => {
+    if (!Buffer.isBuffer(rawBuf) || rawBuf.length === 0) {
+        return '<p>メッセージデータが存在しないか空です。</p>';
+    }
+
+    let buf = rawBuf;
+    if (rawBuf.length >= 2 && ((rawBuf.readUInt16BE(0) + 2) === rawBuf.length)) {
+        buf = rawBuf.subarray(2);
+    }
+
+    if (buf.length < 12) {
+        return `<p>メッセージサイズ (<code>${buf.length}</code> バイト) が DNS ヘッダーの最小長 (12 バイト) 未満です。</p>`;
+    }
+
+    const id = buf.readUInt16BE(0);
+    const flags = buf.readUInt16BE(2);
+    const qdcount = buf.readUInt16BE(4);
+    const ancount = buf.readUInt16BE(6);
+    const nscount = buf.readUInt16BE(8);
+    const arcount = buf.readUInt16BE(10);
+
+    const rcodeNum = flags & 0x0f;
+    const rcodeNames = ['NOERROR', 'FORMERR', 'SERVFAIL', 'NXDOMAIN', 'NOTIMP', 'REFUSED'];
+    const rcodeStr = rcodeNames[rcodeNum] || `RCODE_${rcodeNum}`;
+
+    let html = '<p><strong>【DNSメッセージ異常の分析結果】</strong></p>';
+    html += '<ul>';
+    html += `<li><strong>ヘッダー宣言値:</strong> ID: <code>${id}</code>, RCODE: <code>${rcodeStr}</code>, QDCOUNT: <code>${qdcount}</code>, ANCOUNT: <code>${ancount}</code>, NSCOUNT: <code>${nscount}</code>, ARCOUNT: <code>${arcount}</code> (受信メッセージ長: <code>${buf.length}</code> バイト)</li>`;
+
+    let anomalyReason = '';
+    let offset = 12;
+
+    const readName = (b, startOffset) => {
+        let visited = new Set();
+        let curr = startOffset;
+        let jumped = false;
+        let nextOff = startOffset;
+        let labels = [];
+
+        while (true) {
+            if (curr >= b.length) {
+                throw new Error(`ドメイン名の解読中にメッセージ末尾 (オフセット ${curr} / メッセージ長 ${b.length}) に達しました (Buffer Overflow)`);
+            }
+            if (visited.has(curr)) {
+                throw new Error(`ドメイン名の圧縮ポインタが循環参照 (無限ループ) しています (オフセット 0x${curr.toString(16)})`);
+            }
+            visited.add(curr);
+
+            const len = b[curr];
+            if (len === 0) {
+                if (!jumped) nextOff = curr + 1;
+                break;
+            }
+            if ((len & 0xc0) === 0xc0) {
+                if (curr + 1 >= b.length) {
+                    throw new Error(`圧縮ポインタの読み込み中にメッセージ末尾 (オフセット ${curr}) に達しました`);
+                }
+                const pointer = ((len & 0x3f) << 8) | b[curr + 1];
+                if (pointer < 12) {
+                    throw new Error(`圧縮ポインタ参照先 (0x${pointer.toString(16)}) が DNS ヘッダー領域内を指しています`);
+                }
+                if (pointer >= b.length) {
+                    throw new Error(`圧縮ポインタ参照先 (0x${pointer.toString(16)}) がメッセージ長 (${b.length} バイト) を超えています`);
+                }
+                if (!jumped) nextOff = curr + 2;
+                curr = pointer;
+                jumped = true;
+            } else {
+                if (len > 63) {
+                    throw new Error(`ラベル長 (${len} バイト) が RFC 1035 の最大長 (63 バイト) を超えています`);
+                }
+                if (curr + 1 + len > b.length) {
+                    throw new Error(`ラベル (長さ ${len} バイト) の読み込み中にメッセージ末尾に達しました (Buffer Overflow)`);
+                }
+                labels.push(b.toString('utf8', curr + 1, curr + 1 + len));
+                curr += 1 + len;
+                if (!jumped) nextOff = curr;
+            }
+        }
+        return { name: labels.join('.') || '.', nextOffset: nextOff };
+    };
+
+    try {
+        for (let i = 0; i < qdcount; i++) {
+            if (offset >= buf.length) {
+                throw new Error(`QUESTION SECTION の ${i + 1} 個目のレコードを読み込もうとしましたが、メッセージ末尾に達しました (ヘッダー宣言 QDCOUNT: ${qdcount} に対し、実際に解読できた Question は ${i} 個です)`);
+            }
+            const { name, nextOffset } = readName(buf, offset);
+            offset = nextOffset;
+            if (offset + 4 > buf.length) {
+                throw new Error(`QUESTION SECTION (${escapeHtml(name)}) の TYPE/CLASS 読み込み中にメッセージ末尾に達しました`);
+            }
+            offset += 4;
+        }
+
+        for (let i = 0; i < ancount; i++) {
+            if (offset >= buf.length) {
+                throw new Error(`ANSWER SECTION の ${i + 1} 個目のレコードを読み込もうとしましたが、メッセージ末尾に達しました (ヘッダー宣言 ANCOUNT: ${ancount} に対し、実際に解読できた Answer は ${i} 個です)`);
+            }
+            const { name, nextOffset } = readName(buf, offset);
+            offset = nextOffset;
+            if (offset + 10 > buf.length) {
+                throw new Error(`ANSWER SECTION (${escapeHtml(name)}) のヘッダー情報 (TYPE/CLASS/TTL/RDLENGTH) 読み込み中にメッセージ末尾に達しました`);
+            }
+            const rdlength = buf.readUInt16BE(offset + 8);
+            offset += 10;
+            if (offset + rdlength > buf.length) {
+                throw new Error(`ANSWER SECTION (${escapeHtml(name)}) のレコードデータ (RDLENGTH: ${rdlength} バイト) 読み込み中にメッセージ末尾に達しました`);
+            }
+            offset += rdlength;
+        }
+
+        for (let i = 0; i < nscount; i++) {
+            if (offset >= buf.length) {
+                throw new Error(`AUTHORITY SECTION の ${i + 1} 個目のレコードを読み込もうとしましたが、メッセージ末尾に達しました (ヘッダー宣言 NSCOUNT: ${nscount} に対し、実際に解読できた Authority は ${i} 個です)`);
+            }
+            const { name, nextOffset } = readName(buf, offset);
+            offset = nextOffset;
+            if (offset + 10 > buf.length) {
+                throw new Error(`AUTHORITY SECTION (${escapeHtml(name)}) のヘッダー情報 (TYPE/CLASS/TTL/RDLENGTH) 読み込み中にメッセージ末尾に達しました`);
+            }
+            const rdlength = buf.readUInt16BE(offset + 8);
+            offset += 10;
+            if (offset + rdlength > buf.length) {
+                throw new Error(`AUTHORITY SECTION (${escapeHtml(name)}) のレコードデータ (RDLENGTH: ${rdlength} バイト) 読み込み中にメッセージ末尾に達しました`);
+            }
+            offset += rdlength;
+        }
+
+        for (let i = 0; i < arcount; i++) {
+            if (offset >= buf.length) {
+                throw new Error(`ADDITIONAL SECTION の ${i + 1} 個目のレコードを読み込もうとしましたが、メッセージ末尾に達しました (ヘッダー宣言 ARCOUNT: ${arcount} に対し、実際に解読できた Additional は ${i} 個です)`);
+            }
+            const { name, nextOffset } = readName(buf, offset);
+            offset = nextOffset;
+            if (offset + 10 > buf.length) {
+                throw new Error(`ADDITIONAL SECTION (${escapeHtml(name)}) のヘッダー情報 (TYPE/CLASS/TTL/RDLENGTH) 読み込み中にメッセージ末尾に達しました`);
+            }
+            const rdlength = buf.readUInt16BE(offset + 8);
+            offset += 10;
+            if (offset + rdlength > buf.length) {
+                throw new Error(`ADDITIONAL SECTION (${escapeHtml(name)}) のレコードデータ (RDLENGTH: ${rdlength} バイト) 読み込み中にメッセージ末尾に達しました`);
+            }
+            offset += rdlength;
+        }
+
+        if (offset < buf.length) {
+            throw new Error(`ヘッダーで指定されたすべてのセクション (${qdcount + ancount + nscount + arcount} 個) を解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
+        }
+    } catch (e) {
+        anomalyReason = e.message;
+    }
+
+    if (anomalyReason) {
+        html += `<li><strong>異常理由:</strong> <span style="color: red;">${escapeHtml(anomalyReason)}</span></li>`;
+    } else {
+        html += `<li><strong>異常理由:</strong> メッセージ構造の走査では問題が検出されませんでした (${escapeHtml(originalError ? originalError.message : '未知のエラー')})。</li>`;
+    }
+    html += '</ul>';
+    return html;
+};
+
 const reverseIPv4 = (ip) => {
     if (typeof ip !== 'string') return '';
 
@@ -1057,7 +1219,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // DNSクエリーパケットの構築
+    // DNSクエリーメッセージの構築
     let qType = replaceKnownToUnknownRrType(queryType);
     let qClass = 'IN';
     let qName = domainName;
@@ -1240,9 +1402,6 @@ const server = http.createServer(async (req, res) => {
                 if (data.byteLength > 1) {
                     const plen = data.readUInt16BE(0);
                     expectedLength = plen + 2;	// TCPペイロードの中の DNSメッセージの先頭 2バイトに DNSメッセージのサイズが格納されているので、その分を足す
-                    if (plen < 12) {
-                        html += `<div class="result" style="border-color:orange;"><p>警告：DNSで期待されるパケットサイズ未満でした: ${plen}</p></div>`;
-                    }
                     receivedBuffer = Buffer.from(data);
                 }
             } else {
@@ -1258,7 +1417,7 @@ const server = http.createServer(async (req, res) => {
                     resultHtml += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
                         sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType);
                 } catch (err) {
-                    html += `<div class="result error"><p>エラー: パケットの解析に失敗しました: ${escapeHtml(err.message)}</p></div>`;
+                    html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err)}</div>`;
                 } finally {
                     tcpClient.end();	// AWS (Route 53) は、TCPリソース解放をすぐに行う目的で DNSデータの送信後に RSTを送ってくるので、end() では read ECONNRESET が発生してしまうが、あえてこのようにしている
                 }
@@ -1323,7 +1482,7 @@ const server = http.createServer(async (req, res) => {
                 html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
                     sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType);
             } catch (err) {
-                html += `<div class="result error"><p>エラー: パケットの解析に失敗しました: ${escapeHtml(err.message)}</p></div>`;
+                html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
             } finally {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(html);
@@ -1366,6 +1525,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    analyzeDnsPacketError,
     buildDnsFlags,
     getDnsTypeCode,
     isInvalidDnsServer,

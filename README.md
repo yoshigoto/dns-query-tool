@@ -26,7 +26,7 @@ https://www.on-link.jp/dnsquerytool/
 
 1. 「対象ドメイン名」に問い合わせたいドメイン名を入力します。
 2. 必要に応じて「クエリー先DNSサーバー」、「クエリータイプ」、「RD」などを変更します。
-3. 「DNSパケットを送信」をクリックします。
+3. 「DNSメッセージを送信」をクリックします。
 4. 表示された `ANSWER`、`AUTHORITY`、`ADDITIONAL` の内容を確認します。
 
 デフォルトでは `a.root-servers.net` を問い合わせ先とする非再帰検索です。委任を辿る場合は、応答として表示されたNSやIPアドレスをクリックして次の問い合わせを行います。
@@ -96,7 +96,7 @@ http://localhost:3000/dnsquerytool/api/query?server=8.8.8.8&name=example.com&typ
 | --- | --- |
 | `index.html` | 入力フォーム、説明、結果表示領域 |
 | `dns-query-tool-client.js` | フォーム送信、履歴操作、結果表示、リンクからの再クエリー |
-| `dns-query-tool.js` | HTTPサーバー、DNSパケット生成、UDP/TCP通信、応答解析、HTML生成 |
+| `dns-query-tool.js` | HTTPサーバー、DNSメッセージ生成、UDP/TCP通信、応答解析、HTML生成 |
 | `test-mqtype.js` | MQTYPEオプションの構築と応答解析の簡易テスト |
 | `package.json` | Node.js依存関係の定義 |
 

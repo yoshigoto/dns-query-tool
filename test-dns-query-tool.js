@@ -4,6 +4,7 @@ const { EventEmitter } = require('node:events');
 const test = require('node:test');
 const dnsPacket = require('dns-packet');
 const {
+    analyzeDnsPacketError,
     buildDnsFlags,
     getDnsTypeCode,
     isInvalidDnsServer,
@@ -218,4 +219,23 @@ test('DNSサーバー解決はIPv4失敗時にIPv6を試し、委任先を再帰
     assert.equal(await resolveDnsServerAddress('target.example', false, 0, resolveDelegation), '8.8.4.4');
     assert.equal(targetQueryCount, 2);
     await assert.rejects(resolveDnsServerAddress('example.com', false, 5, resolveDelegation), /入れ子の委任が上限を超えました/);
+});
+
+test('analyzeDnsPacketError が QDCOUNT 不一致などのアノマリーメッセージの異常理由を正しく検出・表示する', () => {
+    // qdcount-mismatch メッセージ (QDCOUNT=2 なのに QUESTION は 1 つだけ)
+    const rawHex = '04d284000002000000000000107164636f756e742d6d69736d6174636807616e6f6d616c790474657374046c646e73026a700000010001';
+    const buf = Buffer.from(rawHex, 'hex');
+    const resultHtml = analyzeDnsPacketError(buf, new Error('Cannot decode name (buffer overflow)'));
+
+    assert.match(resultHtml, /【DNSメッセージ異常の分析結果】/);
+    assert.match(resultHtml, /QDCOUNT: <code>2<\/code>/);
+    assert.match(resultHtml, /QUESTION SECTION の 2 個目のレコードを読み込もうとしましたが、メッセージ末尾に達しました/);
+    assert.match(resultHtml, /ヘッダー宣言 QDCOUNT: 2 に対し、実際に解読できた Question は 1 個です/);
+
+    // 12バイト未満メッセージ (UDP / TCPヘッダー付き)
+    const shortUdpBuf = Buffer.from([0x01, 0x02, 0x03]);
+    assert.match(analyzeDnsPacketError(shortUdpBuf, new Error('short')), /最小長 \(12 バイト\) 未満です/);
+
+    const shortTcpBuf = Buffer.from([0x00, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05]); // TCP 2バイト長ヘッダー(5) + 5バイトのDNSデータ
+    assert.match(analyzeDnsPacketError(shortTcpBuf, new Error('short tcp')), /最小長 \(12 バイト\) 未満です/);
 });
