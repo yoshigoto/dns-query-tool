@@ -275,6 +275,21 @@ test('WARNING SECTIONを最後に出して、構造は解釈できるが異常�
     assert.ok(html.lastIndexOf('WARNING SECTION') > html.lastIndexOf('OPT PSEUDOSECTION'));
 });
 
+test('ヘッダーで宣言された RR を全部読んだ後に余剰バイトが残る場合を警告する', () => {
+    const validPacket = dnsPacket.encode({
+        id: 100,
+        flags: 0,
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    });
+    const raw = Buffer.concat([validPacket, Buffer.from([0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0])]);
+    const html = analyzeDnsPacketError(raw);
+
+    assert.match(html, /未消費データ|残っています|extra bytes/i);
+});
+
 test('応答内のMQTYPE-Queryと予約TYPEを検出する', () => {
     const render = (data) => makeHtmlFromDns({
         id: 100,

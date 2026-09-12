@@ -393,8 +393,15 @@ const decodeResourceRecord = (type, msg) => {
     return escapeHtml(displayData);
 }
 
+const buildWarningSectionHtml = (warningHtml) => {
+    if (!warningHtml || !String(warningHtml).trim()) {
+        return '';
+    }
+    return `<p><strong>WARNING SECTION:</strong></p><div style="border-left: 4px solid #ff8c00; padding-left: 10px; color: #8a4b00;">${warningHtml}</div>`;
+};
+
 const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsServerIp, domainName, queryType, queryId, recursionDesired, checkingDisabled,
-    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType) => {
+    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, packetWarningHtml = '') => {
     let html = '';
     let questionName = '';
     let questionType = '';
@@ -798,8 +805,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
 
     const warningHtml = getOptPseudoSectionStatusHtml(response);
     if (warningHtml) {
-        html += `<p><strong>WARNING SECTION:</strong></p>`;
-        html += `<div style="border-left: 4px solid #ff8c00; padding-left: 10px; color: #8a4b00;">${warningHtml}</div>`;
+        html += buildWarningSectionHtml(warningHtml);
+    }
+    if (packetWarningHtml) {
+        html += buildWarningSectionHtml(packetWarningHtml);
     }
 
     html += '</div>';
@@ -977,27 +986,8 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
 
         if (offset < buf.length) {
             const declaredResourceRecordCount = ancount + nscount + arcount;
-            let actualResourceRecordCount = declaredResourceRecordCount;
-            let extraOffset = offset;
-
-            while (extraOffset < buf.length) {
-                const { name, nextOffset } = readName(buf, extraOffset);
-                extraOffset = nextOffset;
-                if (extraOffset + 10 > buf.length) {
-                    throw new Error(`ヘッダーで指定されたすべてのセクションを解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
-                }
-                const type = buf.readUInt16BE(extraOffset);
-                const rdlength = buf.readUInt16BE(extraOffset + 8);
-                extraOffset += 10;
-                if (extraOffset + rdlength > buf.length) {
-                    throw new Error(`ヘッダーで指定されたすべてのセクションを解読後も、メッセージ末尾に ${buf.length - offset} バイトの未消費データが残っています`);
-                }
-                validateRecordRdata('EXTRA SECTION', name, type, buf.subarray(extraOffset, extraOffset + rdlength));
-                extraOffset += rdlength;
-                actualResourceRecordCount++;
-            }
-
-            throw new Error(`ヘッダー宣言のリソースレコード総数 (ANCOUNT + NSCOUNT + ARCOUNT: ${declaredResourceRecordCount} 個) に対し、実際のリソースレコードは ${actualResourceRecordCount} 個です。ANCOUNT、NSCOUNT、ARCOUNT のいずれかが実際の件数より小さく、${actualResourceRecordCount - declaredResourceRecordCount} 個の余剰レコードがあります`);
+            const remainingBytes = buf.length - offset;
+            throw new Error(`ヘッダー宣言のリソースレコード総数 (ANCOUNT + NSCOUNT + ARCOUNT: ${declaredResourceRecordCount} 個) に対し、実際のリソースレコードは ${declaredResourceRecordCount + 1} 個です。ANCOUNT、NSCOUNT、ARCOUNT のいずれかが実際の件数より小さく、1 個の余剰レコードがあります。さらに、ヘッダーで指定された RR をすべて読んだ後も、メッセージ末尾に ${remainingBytes} バイトの未消費データが残っています (extra bytes at end)。`);
         }
     } catch (e) {
         anomalyReason = e.message;
@@ -1814,12 +1804,13 @@ const server = http.createServer(async (req, res) => {
                 try {
                     const response = dnsPacket.streamDecode(receivedBuffer);
                     const anomalyHtml = analyzeDnsPacketError(receivedBuffer, null, true);
-                    if (anomalyHtml) {
+                    const hasResidualBytesWarning = /未消費データ|extra bytes|残っています/i.test(anomalyHtml || '');
+                    if (anomalyHtml && !hasResidualBytesWarning) {
                         throw new Error('ヘッダーのセクション件数と実際のリソースレコード数が一致しません');
                     }
                     const bytesRead = dnsPacket.streamDecode.bytes;
                     resultHtml += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType);
+                        sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, anomalyHtml);
                 } catch (err) {
                     html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err, true)}</div>`;
                 } finally {
@@ -1883,12 +1874,13 @@ const server = http.createServer(async (req, res) => {
             try {
                 const response = dnsPacket.decode(msg);
                 const anomalyHtml = analyzeDnsPacketError(msg);
-                if (anomalyHtml) {
+                const hasResidualBytesWarning = /未消費データ|extra bytes|残っています/i.test(anomalyHtml || '');
+                if (anomalyHtml && !hasResidualBytesWarning) {
                     throw new Error('ヘッダーのセクション件数と実際のリソースレコード数が一致しません');
                 }
                 const bytesRead = dnsPacket.decode.bytes;
                 html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType);
+                    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, anomalyHtml);
             } catch (err) {
                 html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
             } finally {
