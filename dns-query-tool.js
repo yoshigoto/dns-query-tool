@@ -74,14 +74,95 @@ const getResponseRcode = (response) => {
     return RCODE_NAMES[rcodeNumber] || `RCODE_${rcodeNumber}`;
 };
 
-const getOptPseudoSectionStatusHtml = (response) => {
-    const optRecords = (response.additionals || []).filter(record => record.type === 'OPT' && record.name === '.');
-    if (optRecords.length === 0) {
-        return '';
+const checkOptRdataAnomalies = (buf) => {
+    if (!Buffer.isBuffer(buf) || buf.length < 12) {
+        return [];
     }
+    const parseDomainName = (b, offset) => {
+        let curr = offset;
+        let jumped = false;
+        let count = 0;
+        while (curr < b.length) {
+            if (count++ > 200) break;
+            const len = b[curr];
+            if (len === 0) {
+                if (!jumped) offset = curr + 1;
+                break;
+            }
+            if ((len & 0xc0) === 0xc0) {
+                if (!jumped) offset = curr + 2;
+                break;
+            }
+            curr += 1 + len;
+        }
+        return offset;
+    };
+
+    let offset = 12;
+    const qdcount = buf.readUInt16BE(4);
+    const ancount = buf.readUInt16BE(6);
+    const nscount = buf.readUInt16BE(8);
+    const arcount = buf.readUInt16BE(10);
+
+    for (let i = 0; i < qdcount; i++) {
+        if (offset >= buf.length) break;
+        offset = parseDomainName(buf, offset);
+        offset += 4;
+    }
+
+    const totalRr = ancount + nscount + arcount;
+    const errors = [];
+
+    for (let i = 0; i < totalRr; i++) {
+        if (offset >= buf.length) break;
+        offset = parseDomainName(buf, offset);
+        if (offset + 10 > buf.length) break;
+        const type = buf.readUInt16BE(offset);
+        const rdlength = buf.readUInt16BE(offset + 8);
+        offset += 10;
+
+        if (type === 41) {
+            const rdataStart = offset;
+            const actualRdataLen = Math.min(rdlength, buf.length - rdataStart);
+            let optOffset = 0;
+            while (optOffset < actualRdataLen) {
+                if (optOffset + 4 > actualRdataLen) {
+                    errors.push(`EDNS Option ヘッダー (4バイト) に対し、RDATA の残りが ${actualRdataLen - optOffset} バイトしかありません`);
+                    break;
+                }
+                const optCode = buf.readUInt16BE(rdataStart + optOffset);
+                const optLen = buf.readUInt16BE(rdataStart + optOffset + 2);
+                const remainingData = actualRdataLen - (optOffset + 4);
+                if (optLen > remainingData) {
+                    errors.push(`EDNS Option (コード ${optCode}) の OPTION-LENGTH (${optLen} バイト) が RDATA の残り長さ (${remainingData} バイト) を超過しています`);
+                    break;
+                }
+                optOffset += 4 + optLen;
+            }
+        }
+        offset += rdlength;
+    }
+    return errors;
+};
+
+const getOptPseudoSectionStatusHtml = (response, rawBuf = null) => {
+    const buf = rawBuf || (response && response._rawBuf);
+    const optRecords = (response.additionals || []).filter(record => record.type === 'OPT' && record.name === '.');
 
     let malformed = false;
     let reasons = [];
+
+    if (buf) {
+        const rawErrors = checkOptRdataAnomalies(buf);
+        if (rawErrors.length > 0) {
+            malformed = true;
+            reasons.push(...rawErrors);
+        }
+    }
+
+    if (optRecords.length === 0 && !malformed) {
+        return '';
+    }
 
     for (const record of optRecords) {
         const options = Array.isArray(record.options) ? record.options : [];
@@ -401,7 +482,7 @@ const buildWarningSectionHtml = (warningHtml) => {
 };
 
 const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsServerIp, domainName, queryType, queryId, recursionDesired, checkingDisabled,
-    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, packetWarningHtml = '') => {
+    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, packetWarningHtml = '', rawBuf = null) => {
     let html = '';
     let questionName = '';
     let questionType = '';
@@ -803,7 +884,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += '<p style="color: orange; margin: 0;">追加の情報は見つかりませんでした。</p>';
     }
 
-    const warningHtml = getOptPseudoSectionStatusHtml(response);
+    const warningHtml = getOptPseudoSectionStatusHtml(response, rawBuf);
     if (warningHtml) {
         html += buildWarningSectionHtml(warningHtml);
     }
@@ -1810,7 +1891,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     const bytesRead = dnsPacket.streamDecode.bytes;
                     resultHtml += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, anomalyHtml);
+                        sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, anomalyHtml, receivedBuffer);
                 } catch (err) {
                     html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err, true)}</div>`;
                 } finally {
@@ -1880,7 +1961,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 const bytesRead = dnsPacket.decode.bytes;
                 html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, anomalyHtml);
+                    sendTcp, sendIpv6, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, anomalyHtml, msg);
             } catch (err) {
                 html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
             } finally {

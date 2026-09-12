@@ -672,3 +672,18 @@ test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証�
     assert.match(html, /\[SSHFP\].*algorithm: Ed25519, fpType: SHA-256, fingerprint: 1234/);
     assert.match(html, /\[NAPTR\].*order: 100, preference: 10, flags: S, services: SIP\+D2U/);
 });
+
+test('rdata-opt-truncated の生パケットで OPTION-LENGTH 超過による WARNING SECTION の表示を検証する', () => {
+    const rawMsg = Buffer.from('04d2840000010000000000011372646174612d6f70742d7472756e636174656407616e6f6d616c790474657374046c646e73026a7000000100010000291000000000000008000a001031323334', 'hex');
+    const decoded = dnsPacket.decode(rawMsg);
+    const html = makeHtmlFromDns(
+        decoded, rawMsg.length, 'http://localhost:3000', '/api/query', 'ns2.ldns.jp', '160.16.111.88',
+        'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 1234,
+        false, false, false, false, true, false, '1232', false,
+        '', false, '255', 'A', '', rawMsg
+    );
+
+    assert.match(html, /WARNING SECTION/);
+    assert.match(html, /OPT疑似セクションとして破損しています/);
+    assert.match(html, /OPTION-LENGTH \(16 バイト\) が RDATA の残り長さ \(4 バイト\) を超過しています/);
+});
