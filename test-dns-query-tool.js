@@ -68,6 +68,30 @@ test('QUESTION SECTIONがなくても要求値を表示する', () => {
     assert.match(html, /クエリータイプ: <code>A<\/code>/);
 });
 
+test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: [{
+            type: 'OPT',
+            name: '.',
+            extendedRcode: 1,
+            version: 0,
+            udpPayloadSize: 1232,
+            flags: 0,
+            options: []
+        }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /応答ステータス \(rcode\): <code>BADVERS<\/code>/);
+    assert.match(html, /Extended RCODE: 1/);
+});
+
 test('MQTYPE応答を表示し、形式不正を警告する', () => {
     const createResponse = (data) => ({
         id: 100,

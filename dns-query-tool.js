@@ -6,6 +6,44 @@ const dgram = require('dgram');
 const dnsPacket = require('dns-packet');	// https://github.com/mafintosh/dns-packet
 const dnsTypes = require('dns-packet/types');
 
+const RCODE_NAMES = {
+    0: 'NOERROR',
+    1: 'FORMERR',
+    2: 'SERVFAIL',
+    3: 'NXDOMAIN',
+    4: 'NOTIMP',
+    5: 'REFUSED',
+    6: 'YXDOMAIN',
+    7: 'YXRRSET',
+    8: 'NXRRSET',
+    9: 'NOTAUTH',
+    10: 'NOTZONE',
+    16: 'BADVERS',
+    17: 'BADKEY',
+    18: 'BADTIME',
+    19: 'BADMODE',
+    20: 'BADNAME',
+    21: 'BADALG',
+    22: 'BADTRUNC',
+    23: 'BADCOOKIE'
+};
+
+const getRcodeNumber = (rcode) => {
+    if (Number.isInteger(rcode)) return rcode;
+    const entry = Object.entries(RCODE_NAMES).find(([, name]) => name === rcode);
+    if (entry) return Number(entry[0]);
+    const match = /^RCODE_(\d+)$/.exec(String(rcode));
+    return match ? Number(match[1]) : 0;
+};
+
+const getResponseRcode = (response) => {
+    const baseRcode = getRcodeNumber(response.rcode);
+    const optRecord = response.additionals?.find((record) => record.type === 'OPT' && record.name === '.');
+    const extendedRcode = Number.isInteger(optRecord?.extendedRcode) ? optRecord.extendedRcode : 0;
+    const rcodeNumber = (extendedRcode << 4) | baseRcode;
+    return RCODE_NAMES[rcodeNumber] || `RCODE_${rcodeNumber}`;
+};
+
 // RFC 8914 に定義されている INFO-CODE のマッピング表
 const EDE_ERRORS = {
     0: 'Other Error',
@@ -270,8 +308,8 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += `<li style="color: red;">クエリータイプ: <code>${escapeHtml(queryType)}</code> - 応答に QUESTION SECTION が存在しません</li>`;
     }
 
-    // 応答コード (rcode) の取得
-    const rcode = response.rcode;
+    // 応答コード (rcode) の取得。Extended RCODE は OPT の TTL 上位オクテットから合成する。
+    const rcode = getResponseRcode(response);
     html += `<li>応答ステータス (rcode): <code>${escapeHtml(rcode)}</code></li>`;
 
     // フラグの取得
@@ -519,7 +557,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         if (mQTypeResponseInvalid) {
                             optError = '<p style="color: red; margin: 0;">MQTYPE-Response が RFC 10029 の形式に適合していません。</p>';
                         }
-                        optPseudo = `<li><strong>[EDNS]</strong> <code>Version: 0, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`;
+                        optPseudo = `<li><strong>[EDNS]</strong> <code>Extended RCODE: ${optRecord.extendedRcode || 0}, Version: ${optRecord.version || 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`;
                         if (nsidString !== '') {
                             optPseudo += `<li><strong>[NSID]</strong> <code>${nsidString}</code></li>`;
                         }
@@ -588,8 +626,7 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
     const arcount = buf.readUInt16BE(10);
 
     const rcodeNum = flags & 0x0f;
-    const rcodeNames = ['NOERROR', 'FORMERR', 'SERVFAIL', 'NXDOMAIN', 'NOTIMP', 'REFUSED'];
-    const rcodeStr = rcodeNames[rcodeNum] || `RCODE_${rcodeNum}`;
+    const rcodeStr = RCODE_NAMES[rcodeNum] || `RCODE_${rcodeNum}`;
 
     let html = '<p><strong>【DNSメッセージ異常の分析結果】</strong></p>';
     html += '<ul>';
