@@ -954,7 +954,7 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
     } else if (!originalError) {
         return '';
     } else {
-        html += `<li><strong>異常理由:</strong> 本ツールにおけるメッセージ構造の走査機能では問題を検出できませんでした (${escapeHtml(originalError ? originalError.message : '未知のエラー')})。</li>`;
+        html += `<li><strong>異常理由:</strong> 本ツールの走査機能では検出できないメッセージ構造でした (${escapeHtml(originalError ? originalError.message : '未知のエラー')})。</li>`;
     }
     html += '</ul>';
     return html;
