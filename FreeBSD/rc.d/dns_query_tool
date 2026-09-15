@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# PROVIDE: dns_query_tool
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="dns_query_tool"
+rcvar="dns_query_tool_enable"
+
+load_rc_config "$name"
+
+: ${dns_query_tool_enable:="NO"}
+: ${dns_query_tool_chdir:="/usr/local/www/dns-query-tool"}
+: ${dns_query_tool_node:="/usr/local/bin/node"}
+: ${dns_query_tool_script:="dns-query-tool.js"}
+: ${dns_query_tool_pidfile:="/var/run/${name}.pid"}
+: ${dns_query_tool_log:="/var/log/${name}.log"}
+
+pidfile="${dns_query_tool_pidfile}"
+command="/usr/sbin/daemon"
+command_args="-f -p ${pidfile} -o ${dns_query_tool_log} ${dns_query_tool_node} ${dns_query_tool_chdir}/${dns_query_tool_script}"
+stop_cmd=${name}_stop
+
+dns_query_tool_stop() {
+	test -e ${pidfile} && kill "$(cat ${pidfile})"
+}
+
+run_rc_command "$1"
