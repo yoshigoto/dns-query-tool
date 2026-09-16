@@ -1461,10 +1461,21 @@ const ROOT_SERVERS = [
 
 const normalizeDnsName = (name) => name.replace(/\.$/, '').toLowerCase();
 
+const isMatchingDnsResponse = (response, query) => {
+    if (!response || response.id !== query.id) {
+        return false;
+    }
+    const question = response.questions?.[0];
+    if (!question) {
+        return true;
+    }
+    return question.type === query.questions[0].type &&
+        normalizeDnsName(question.name) === normalizeDnsName(query.questions[0].name);
+};
+
 const queryAuthoritativeServerOverTcp = (serverAddress, query) => new Promise((resolve, reject) => {
     const client = new net.Socket({ family: net.isIP(serverAddress) === 6 ? 6 : 4 });
     let responseBuffer = Buffer.alloc(0);
-    let expectedLength = null;
     let settled = false;
     const finish = (callback) => {
         if (settled) return;
@@ -1482,17 +1493,24 @@ const queryAuthoritativeServerOverTcp = (serverAddress, query) => new Promise((r
     });
     client.on('data', (data) => {
         responseBuffer = Buffer.concat([responseBuffer, data]);
-        if (expectedLength === null && responseBuffer.length >= 2) {
-            expectedLength = responseBuffer.readUInt16BE(0) + 2;
-        }
-        if (expectedLength !== null && responseBuffer.length >= expectedLength) {
-            finish(() => {
-                try {
-                    resolve(dnsPacket.streamDecode(responseBuffer));
-                } catch (error) {
-                    reject(error);
+        while (responseBuffer.length >= 2) {
+            const messageLength = responseBuffer.readUInt16BE(0);
+            if (responseBuffer.length < messageLength + 2) {
+                return;
+            }
+            const frame = responseBuffer.subarray(0, messageLength + 2);
+            responseBuffer = responseBuffer.subarray(messageLength + 2);
+            try {
+                const response = dnsPacket.streamDecode(frame);
+                if (!isMatchingDnsResponse(response, query)) {
+                    continue;
                 }
-            });
+                finish(() => resolve(response));
+                return;
+            } catch (error) {
+                finish(() => reject(error));
+                return;
+            }
         }
     });
     client.once('error', (error) => {
@@ -1524,11 +1542,17 @@ const queryAuthoritativeServer = (serverAddress, name, type, createSocket = dgra
         reject(new Error(`${serverAddress} から UDP 応答がありませんでした。`));
     }, 2000);
 
-    client.once('message', (message) => {
-        clearTimeout(timeoutId);
-        client.close();
+    client.on('message', (message, rinfo) => {
+        if (rinfo && rinfo.address !== serverAddress) {
+            return;
+        }
         try {
             const response = dnsPacket.decode(message);
+            if (!isMatchingDnsResponse(response, query)) {
+                return;
+            }
+            clearTimeout(timeoutId);
+            client.close();
             if (response.flags & dnsPacket.TRUNCATED_RESPONSE) {
                 queryOverTcp(serverAddress, query).then(resolve, reject);
                 return;

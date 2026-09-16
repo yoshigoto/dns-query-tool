@@ -403,7 +403,13 @@ test('UDPのTCフラグを受けるとTCP応答へ切り替える', async () => 
         socket.close = () => {};
         socket.send = (...args) => {
             args.at(-1)();
-            queueMicrotask(() => socket.emit('message', udpResponse));
+            const query = dnsPacket.decode(args[0]);
+            const response = dnsPacket.encode({
+                ...dnsPacket.decode(udpResponse),
+                id: query.id,
+                questions: query.questions
+            });
+            queueMicrotask(() => socket.emit('message', response));
         };
         return socket;
     };
@@ -417,6 +423,33 @@ test('UDPのTCフラグを受けるとTCP応答へ切り替える', async () => 
 
     assert.equal(await queryAuthoritativeServer('8.8.8.8', 'example.com', 'A', createSocket, queryOverTcp), tcpResponse);
     assert.deepEqual(tcpQuery.questions, [{ name: 'example.com', type: 'A', class: 'IN' }]);
+});
+
+test('UDP問い合わせは不一致IDと不正な送信元の応答を無視する', async () => {
+    const createSocket = () => {
+        const socket = new EventEmitter();
+        socket.close = () => {};
+        socket.send = (...args) => {
+            args.at(-1)();
+            const query = dnsPacket.decode(args[0]);
+            const response = {
+                type: 'response',
+                id: query.id,
+                questions: query.questions,
+                answers: []
+            };
+            queueMicrotask(() => {
+                socket.emit('message', dnsPacket.encode({ ...response, id: (query.id + 1) % 65536 }), { address: '8.8.8.8' });
+                socket.emit('message', dnsPacket.encode(response), { address: '192.0.2.1' });
+                socket.emit('message', dnsPacket.encode(response), { address: '8.8.8.8' });
+            });
+        };
+        return socket;
+    };
+
+    const response = await queryAuthoritativeServer('8.8.8.8', 'example.com', 'A', createSocket);
+    assert.ok(Number.isInteger(response.id));
+    assert.equal(response.questions[0].name, 'example.com');
 });
 
 test('TCP問い合わせ時はTC推奨メッセージを出さない', () => {
