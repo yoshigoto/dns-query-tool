@@ -340,39 +340,118 @@ const replaceUnknownRrTypeList = (rrtypes) => {
 
 const decodeResourceRecord = (type, msg) => {
     let displayData = '';
+    const malformed = (recordType) => escapeHtml(`malformed ${recordType} RDATA`);
+    const hasFields = (value, fields) => value && typeof value === 'object' && !Buffer.isBuffer(value) &&
+        fields.every(field => Object.hasOwn(value, field));
+    const decodeCharacterStrings = (buffer) => {
+        const strings = [];
+        let offset = 0;
+        while (offset < buffer.length) {
+            const length = buffer[offset++];
+            if (offset + length > buffer.length) {
+                return null;
+            }
+            strings.push(buffer.toString('utf8', offset, offset + length));
+            offset += length;
+        }
+        return strings;
+    };
+
     if (type === 'TXT') {
         // TXTレコードはBufferまたは'text'の配列か、Bufferか'text'で返ってくる
         if (Array.isArray(msg)) {
             displayData = msg.map(buf => Buffer.isBuffer(buf) ? buf.toString('utf8') : buf).join('');
         } else if (Buffer.isBuffer(msg)) {
-            displayData = msg.toString('utf8');
+            const strings = decodeCharacterStrings(msg);
+            displayData = strings === null ? msg.toString('utf8') : strings.join('');
         } else {
             displayData = msg;
         }
+    } else if (type === 'SPF') {
+        if (!Buffer.isBuffer(msg)) {
+            return malformed('SPF');
+        }
+        const strings = decodeCharacterStrings(msg);
+        if (strings === null) {
+            return malformed('SPF');
+        }
+        displayData = `strings: ${strings.join('')}`;
+    } else if (type === 'NSEC3PARAM') {
+        if (!Buffer.isBuffer(msg) || msg.length < 5) {
+            return escapeHtml('malformed NSEC3PARAM RDATA');
+        }
+        const saltLength = msg[4];
+        if (5 + saltLength !== msg.length) {
+            return escapeHtml('malformed NSEC3PARAM RDATA');
+        }
+        displayData = `algorithm: ${msg[0]}, flags: ${msg[1]}, iterations: ${msg.readUInt16BE(2)}, salt: ${msg.subarray(5).toString('base64')}`;
+    } else if (type === 'CDS') {
+        if (!Buffer.isBuffer(msg) || msg.length < 4) {
+            return escapeHtml('malformed CDS RDATA');
+        }
+        displayData = `keyTag: ${msg.readUInt16BE(0)}, algorithm: ${msg[2]}, digestType: ${msg[3]}, digest: ${msg.subarray(4).toString('hex').toLowerCase()}`;
+    } else if (type === 'CDNSKEY') {
+        if (!Buffer.isBuffer(msg) || msg.length < 4) {
+            return escapeHtml('malformed CDNSKEY RDATA');
+        }
+        displayData = `flags: ${msg.readUInt16BE(0)}, protocol: ${msg[2]}, algorithm: ${msg[3]}, key: ${msg.subarray(4).toString('base64')}`;
     } else if (type === 'CAA') {
+        if (!hasFields(msg, ['flags', 'tag', 'value'])) {
+            return malformed('CAA');
+        }
         displayData = `flags: ${msg.flags}, tag: ${msg.tag}, value: ${msg.value}, issuerCritical: ${msg.issuerCritical}`;
     } else if (type === 'DNSKEY') {
         // dns-packet では DNSKEYリソースレコードの Protocol は 3 固定
+        if (!hasFields(msg, ['flags', 'algorithm', 'key']) || !Buffer.isBuffer(msg.key)) {
+            return malformed('DNSKEY');
+        }
         displayData = `flags: ${msg.flags}, protocol: 3, algorithm: ${msg.algorithm}, key: ${msg.key.toString('base64')}`;
     } else if (type === 'DS') {
+        if (!hasFields(msg, ['keyTag', 'algorithm', 'digestType', 'digest']) || !Buffer.isBuffer(msg.digest)) {
+            return malformed('DS');
+        }
         displayData = `keyTag: ${msg.keyTag}, algorithm: ${msg.algorithm}, digestType: ${msg.digestType}, digest: ${msg.digest.toString('hex').toLowerCase()}`;
     } else if (type === 'NSEC') {
+        if (!hasFields(msg, ['nextDomain', 'rrtypes']) || !Array.isArray(msg.rrtypes)) {
+            return malformed('NSEC');
+        }
         const rrtypes = replaceUnknownRrTypeList(msg.rrtypes);
         displayData = `nextDomain: ${msg.nextDomain}, rrtypes: ${rrtypes.join(' ')}`;
     } else if (type === 'NSEC3') {
+        if (!hasFields(msg, ['algorithm', 'flags', 'iterations', 'salt', 'nextDomain', 'rrtypes']) ||
+            !Buffer.isBuffer(msg.salt) || !Buffer.isBuffer(msg.nextDomain) || !Array.isArray(msg.rrtypes)) {
+            return malformed('NSEC3');
+        }
         const rrtypes = replaceUnknownRrTypeList(msg.rrtypes);
         displayData = `algorithm: ${msg.algorithm}, flags: ${msg.flags}, iterations: ${msg.iterations}, salt: ${msg.salt.toString('base64')}, `
         displayData += `nextDomain: ${msg.nextDomain.toString('base64')}, rrtypes: ${rrtypes.join(' ')}`;
     } else if (type === 'RRSIG') {
+        if (!hasFields(msg, ['typeCovered', 'algorithm', 'labels', 'originalTTL', 'expiration', 'inception', 'keyTag', 'signersName', 'signature']) ||
+            !Buffer.isBuffer(msg.signature)) {
+            return malformed('RRSIG');
+        }
         const expiration = new Date(msg.expiration * 1000);
         const inception = new Date(msg.inception * 1000);
+        if (Number.isNaN(expiration.getTime()) || Number.isNaN(inception.getTime())) {
+            return malformed('RRSIG');
+        }
         displayData = `typeCovered: ${msg.typeCovered}, algorithm: ${msg.algorithm}, labels: ${msg.labels}, originalTTL: ${msg.originalTTL}, expiration: ${expiration.toISOString()}, `;
         displayData += `inception: ${inception.toISOString()}, keyTag: ${msg.keyTag}, signersName: ${msg.signersName}, signature: ${msg.signature.toString('base64')}`;
     } else if (type === 'SOA') {
+        if (!hasFields(msg, ['mname', 'rname', 'serial', 'refresh', 'retry', 'expire', 'minimum'])) {
+            return malformed('SOA');
+        }
         displayData = `mname: ${msg.mname}, rname: ${msg.rname}, serial: ${msg.serial}, refresh: ${msg.refresh}, retry: ${msg.retry}, expire: ${msg.expire}, minimum: ${msg.minimum}`;
     } else if (type === 'SRV') {
+        if (!hasFields(msg, ['priority', 'weight', 'port', 'target'])) {
+            return malformed('SRV');
+        }
         displayData = `priority: ${msg.priority}, weight: ${msg.weight}, port: ${msg.port}, target: ${msg.target}`;
     } else if (type === 'TLSA') {
+        if (!hasFields(msg, ['usage', 'selector', 'matchingType']) ||
+            (!Buffer.isBuffer(msg.certificate) && !Buffer.isBuffer(msg.data))) {
+            return malformed('TLSA');
+        }
         const usageNames = { 0: 'PKIX-TA', 1: 'PKIX-EE', 2: 'DANE-TA', 3: 'DANE-EE' };
         const selectorNames = { 0: 'Cert', 1: 'SPKI' };
         const matchingTypeNames = { 0: 'Full', 1: 'SHA-256', 2: 'SHA-512' };
@@ -382,6 +461,10 @@ const decodeResourceRecord = (type, msg) => {
         const certHex = Buffer.isBuffer(msg.certificate) ? msg.certificate.toString('hex') : (msg.certificate || (Buffer.isBuffer(msg.data) ? msg.data.toString('hex') : msg.data || ''));
         displayData = `usage: ${usageStr}, selector: ${selectorStr}, matchingType: ${matchingTypeStr}, certificate: ${certHex}`;
     } else if (type === 'SSHFP') {
+        if (!hasFields(msg, ['algorithm']) || (msg.fpType === undefined && msg.type === undefined) ||
+            (!Buffer.isBuffer(msg.fingerprint) && !Buffer.isBuffer(msg.data))) {
+            return malformed('SSHFP');
+        }
         const algoNames = { 1: 'RSA', 2: 'DSA', 3: 'ECDSA', 4: 'Ed25519' };
         const fpTypeNames = { 1: 'SHA-1', 2: 'SHA-256' };
         const algo = algoNames[msg.algorithm] !== undefined ? algoNames[msg.algorithm] : msg.algorithm;
@@ -390,6 +473,9 @@ const decodeResourceRecord = (type, msg) => {
         const fpHex = Buffer.isBuffer(msg.fingerprint) ? msg.fingerprint.toString('hex') : (msg.fingerprint || (Buffer.isBuffer(msg.data) ? msg.data.toString('hex') : msg.data || ''));
         displayData = `algorithm: ${algo}, fpType: ${fpTypeStr}, fingerprint: ${fpHex}`;
     } else if (type === 'NAPTR') {
+        if (!hasFields(msg, ['order', 'preference', 'flags', 'services', 'regexp', 'replacement'])) {
+            return malformed('NAPTR');
+        }
         displayData = `order: ${msg.order}, preference: ${msg.preference}, flags: ${msg.flags}, services: ${msg.services}, regexp: ${msg.regexp}, replacement: ${msg.replacement}`;
     } else if (replaceUnknownRrTypeToKnown(type) === 'SVCB' || replaceUnknownRrTypeToKnown(type) === 'HTTPS' ) {
         let offset = 0;
@@ -443,15 +529,24 @@ const decodeResourceRecord = (type, msg) => {
                     while (idx < paramValBuffer.length) {
                         const len = paramValBuffer[idx];
                         idx += 1;
+                        if (idx + len > paramValBuffer.length) {
+                            return escapeHtml('malformed SVCB/HTTPS ALPN SvcParam');
+                        }
                         alpnList.push(paramValBuffer.toString('utf8', idx, idx + len));
                         idx += len;
                     }
                     paramString += `alpn=${alpnList}, `;
                     break;
                 case 3: // Port for alternative endpoint (2バイトの整数)
+                    if (paramValBuffer.length !== 2) {
+                        return escapeHtml('malformed SVCB/HTTPS port SvcParam');
+                    }
                     paramString += `port=${paramValBuffer.readUInt16BE(0)}, `;
                     break;
                 case 4: // IPv4 address hints (4バイトの整数のリスト)
+                    if (paramValBuffer.length % 4 !== 0) {
+                        return escapeHtml('malformed SVCB/HTTPS ipv4hint SvcParam');
+                    }
                     let ipv4List = [];
                     for (let i = 0; i < paramValBuffer.length; i += 4) {
                         const num = paramValBuffer.readUInt32BE(i); 
@@ -469,6 +564,9 @@ const decodeResourceRecord = (type, msg) => {
                     paramString += `ech=${paramValBuffer.toString('hex')}, `;
                     break;
                 case 6: // IPv6 address hints (16バイトの整数のリスト)
+                    if (paramValBuffer.length % 16 !== 0) {
+                        return escapeHtml('malformed SVCB/HTTPS ipv6hint SvcParam');
+                    }
                     let ipv6List = [];
                     for (let i = 0; i < paramValBuffer.length; i += 16) {
                         const hex = paramValBuffer.toString('hex', i);

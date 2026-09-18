@@ -764,6 +764,99 @@ test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証�
     assert.match(html, /\[NAPTR\].*order: 100, preference: 10, flags: S, services: SIP\+D2U/);
 });
 
+test('SPF, NSEC3PARAM, CDS, CDNSKEY の生 RDATA をデコード表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'SPF' }],
+        answers: [
+            { name: 'example.com', type: 'SPF', ttl: 300, data: Buffer.from([3, 97, 98, 99, 2, 100, 101]) },
+            { name: 'example.com', type: 'NSEC3PARAM', ttl: 300, data: Buffer.from([1, 0, 0, 2, 2, 0xaa, 0xbb]) },
+            { name: 'example.com', type: 'CDS', ttl: 300, data: Buffer.from([0x12, 0x34, 8, 2, 0xde, 0xad]) },
+            { name: 'example.com', type: 'CDNSKEY', ttl: 300, data: Buffer.from([0x01, 0x00, 3, 13, 1, 2, 3]) }
+        ],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'SPF', 100,
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /\[SPF\].*strings: abcde/);
+    assert.match(html, /\[NSEC3PARAM\].*algorithm: 1, flags: 0, iterations: 2, salt: qrs=/);
+    assert.match(html, /\[CDS\].*keyTag: 4660, algorithm: 8, digestType: 2, digest: dead/);
+    assert.match(html, /\[CDNSKEY\].*flags: 256, protocol: 3, algorithm: 13, key: AQID/);
+});
+
+test('SVCB の不正な SvcParam 長を malformed として表示する', () => {
+    const invalidRdata = [
+        { data: Buffer.from([0, 1, 0, 0, 1, 0, 2, 3, 97]), message: 'ALPN SvcParam' },
+        { data: Buffer.from([0, 1, 0, 0, 3, 0, 1, 0]), message: 'port SvcParam' },
+        { data: Buffer.from([0, 1, 0, 0, 4, 0, 1, 192]), message: 'ipv4hint SvcParam' },
+        { data: Buffer.from([0, 1, 0, 0, 6, 0, 1, 0]), message: 'ipv6hint SvcParam' }
+    ];
+
+    for (const { data, message } of invalidRdata) {
+        const html = makeHtmlFromDns({
+            id: 100,
+            flags: 0,
+            rcode: 'NOERROR',
+            questions: [{ name: 'example.com', type: 'SVCB' }],
+            answers: [{ name: 'example.com', type: 'SVCB', ttl: 300, data }],
+            authorities: [],
+            additionals: []
+        }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'SVCB', 100,
+        false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
+
+        assert.match(html, new RegExp(`malformed SVCB/HTTPS ${message}`));
+    }
+});
+
+test('TXT の wire-format Buffer を character-string として表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'TXT' }],
+        answers: [{ name: 'example.com', type: 'TXT', ttl: 300, data: Buffer.from([3, 97, 98, 99, 2, 100, 101]) }],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'TXT', 100,
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /\[TXT\].*abcde/);
+});
+
+test('既存のオブジェクト型 RDATA の必須フィールド欠損を malformed として表示する', () => {
+    const invalidRecords = [
+        { type: 'CAA', data: {} },
+        { type: 'DNSKEY', data: { flags: 256, algorithm: 13 } },
+        { type: 'DS', data: { keyTag: 1, algorithm: 8, digestType: 2 } },
+        { type: 'NSEC', data: { nextDomain: 'example.com' } },
+        { type: 'NSEC3', data: { algorithm: 1, flags: 0, iterations: 1, salt: Buffer.alloc(0), nextDomain: Buffer.alloc(1) } },
+        { type: 'RRSIG', data: { expiration: 'invalid', inception: 1, signature: Buffer.alloc(1) } },
+        { type: 'SOA', data: {} },
+        { type: 'SRV', data: {} },
+        { type: 'TLSA', data: { usage: 3, selector: 1, matchingType: 1 } },
+        { type: 'SSHFP', data: { algorithm: 4, fpType: 2 } },
+        { type: 'NAPTR', data: {} }
+    ];
+
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: invalidRecords.map(record => ({ ...record, name: 'example.com', ttl: 300 })),
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
+
+    for (const { type } of invalidRecords) {
+        assert.match(html, new RegExp(`malformed ${type} RDATA`));
+    }
+});
+
 test('rdata-opt-truncated の生パケットで OPTION-LENGTH 超過による WARNING SECTION の表示を検証する', () => {
     const rawMsg = Buffer.from('04d2840000010000000000011372646174612d6f70742d7472756e636174656407616e6f6d616c790474657374046c646e73026a7000000100010000291000000000000008000a001031323334', 'hex');
     const decoded = dnsPacket.decode(rawMsg);
