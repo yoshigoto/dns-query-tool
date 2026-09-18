@@ -128,7 +128,7 @@ test('QUESTION SECTIONがなくても要求値を表示する', () => {
         authorities: [],
         additionals: []
     }, 12, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /応答に QUESTION SECTION が存在しません/);
     assert.match(html, /example\.com/);
@@ -153,7 +153,7 @@ test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
             options: []
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /応答ステータス \(rcode\): <code>BADVERS<\/code>/);
     assert.match(html, /Extended RCODE: 1 \(BADVERS \/ BADSIG\)/);
@@ -177,7 +177,7 @@ test('Extended RCODEの略称をヘッダーRCODEと合成して判定する', (
             options: []
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rcode-badkey.anomaly.test.ldns.jp', 'A', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /応答ステータス \(rcode\): <code>BADKEY<\/code>/);
     assert.match(html, /Extended RCODE: 1 \(BADKEY\)/);
@@ -200,7 +200,7 @@ test('MQTYPE応答を表示し、形式不正を警告する', () => {
         }]
     });
     const render = (response) => makeHtmlFromDns(response, 20, 'http://localhost:3000', '/api/query',
-        '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100, false, false, false, false,
+        '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100, false, false, false, false, false, '',
         '1232', false, 'AAAA,MX', false, 255, 'A');
 
     assert.match(render(createResponse(Buffer.from([0, 28, 0, 15]))), /MQTYPE-Response.*AAAA,MX/);
@@ -227,7 +227,7 @@ test('EDNS optionをraw表示し、NSIDをhexで表示する', () => {
             ]
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /\[NSID\]<\/strong> <code>ff0041<\/code>/);
     assert.match(html, /OPTION_10 \(10\): 0102/);
@@ -250,7 +250,7 @@ test('EDNS0 の DO フラグおよび CO フラグ (Compact Answers OK) を正�
             options: []
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    true, false, false, false, '1232', false, '', false, 255, 'A');
+    true, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /flags: DO CO/);
 });
@@ -273,7 +273,7 @@ test('OPT疑似セクションが一般的に破損している場合を表示�
             }]
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 100,
-    true, false, false, false, '1232', false, '', false, 255, 'A');
+    true, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /OPT疑似セクション.*破損|一般的な OPT 疑似セクションとして破損/);
 });
@@ -301,7 +301,7 @@ test('WARNING SECTIONを最後に出して、構造は解釈できるが異常�
             }]
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 100,
-    true, false, false, false, '1232', false, '', false, 255, 'A');
+    true, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /WARNING SECTION/);
     assert.match(html, /BADTRUNC|本来の姿から乖離/);
@@ -339,7 +339,7 @@ test('応答内のMQTYPE-Queryと予約TYPEを検出する', () => {
             options: [{ code: 20, data: Buffer.alloc(0) }, { code: 21, data }]
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, false, false, '1232', false, 'AAAA', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, 'AAAA', false, 255, 'A');
 
     assert.match(render(Buffer.from([0, 0])), /MQTYPE-Query が含まれているため/);
     assert.match(render(Buffer.from([0, 128])), /RFC 10029 の形式に適合していません/);
@@ -364,7 +364,7 @@ test('DNS応答内のHTMLとEDE追加テキストをエスケープする', () =
             ]
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'TXT', 100,
-    false, false, true, false, '1232', true, '', false, 255, 'A');
+    false, false, true, false, false, '', '1232', true, '', false, 255, 'A');
 
     const knownEdeHtml = render(15);
     assert.doesNotMatch(knownEdeHtml, /<script>|<img|<svg>|<b>note/);
@@ -478,7 +478,7 @@ test('TCP問い合わせ時はTC推奨メッセージを出さない', () => {
         authorities: [],
         additionals: []
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, true, false, false, '1232', false, '', false, 255, 'A');
+    false, false, true, false, false, '', false, '1232', false, '', false, 255, 'A');
 
     assert.doesNotMatch(html, /TCフラグが立っているので TCPでの再確認を推奨します/);
 });
@@ -600,7 +600,7 @@ test('SVCB TargetName の RDATA 長超過を検出し、表示処理を停止さ
     const response = dnsPacket.decode(packet);
     const html = makeHtmlFromDns(response, packet.length, 'http://localhost:3000', '/api/query',
         'ns2.ldns.jp', '160.16.111.88', qname, 'SVCB', 0x1234,
-        false, false, false, false, '1232', false, '', false, 255, 'A');
+        false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
     assert.match(html, /malformed SVCB\/HTTPS TargetName/);
 });
 
@@ -661,7 +661,7 @@ test('Opcode, QR(0), Reserved(Z) フラグを解析・表示する', () => {
         authorities: [],
         additionals: []
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /Opcode: <code>NOTIFY<\/code>/);
     assert.match(html, /QUERY 以外の Opcode です/);
@@ -693,7 +693,7 @@ test('EDNS Option の ECS, Cookie, Padding をデコード表示する', () => {
             ]
         }]
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /\[ECS\]<\/strong> <code>family: 1 \(IPv4\), sourcePrefix: 24, scopePrefix: 0, address: 192\.0\.2\.0<\/code>/);
     assert.match(html, /\[Cookie\]<\/strong> <code>Client Cookie: 1234567887654321, Server Cookie: 00000000<\/code>/);
@@ -723,7 +723,7 @@ test('RFC 2308 ネガティブキャッシュ (Negative Caching) の TTL 算出�
         }],
         additionals: []
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /RFC 2308 \(Negative Caching\): ネガティブキャッシュ有効期間 \(TTL\) は <code>60秒<\/code>/);
 });
@@ -757,7 +757,7 @@ test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証�
         authorities: [],
         additionals: []
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'TLSA', 100,
-    false, false, false, false, '1232', false, '', false, 255, 'A');
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /\[TLSA\].*usage: DANE-EE, selector: SPKI, matchingType: SHA-256, certificate: abcd/);
     assert.match(html, /\[SSHFP\].*algorithm: Ed25519, fpType: SHA-256, fingerprint: 1234/);
@@ -770,7 +770,7 @@ test('rdata-opt-truncated の生パケットで OPTION-LENGTH 超過による WA
     const html = makeHtmlFromDns(
         decoded, rawMsg.length, 'http://localhost:3000', '/api/query', 'ns2.ldns.jp', '160.16.111.88',
         'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 1234,
-        false, false, false, false, true, false, '1232', false,
+        false, false, false, false, false, '', true, false, '1232', false,
         '', false, '255', 'A', '', rawMsg
     );
 

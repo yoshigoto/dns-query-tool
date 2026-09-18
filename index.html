@@ -171,6 +171,12 @@
                     <label class="label-description" for="ipv6">(可能な場合に IPv6で通信したいときはチェック)</label>
                 </div>
                 <div>
+                    <label for="https" class="label-wide">HTTPS送受信:</label>
+                    <input type="checkbox" id="https" name="https" value="1">
+                    <input type="text" class="input-wide" id="httpspath" name="httpspath" placeholder="/dns-query" disabled>
+                    <label class="label-description" for="httpspath">(DoHで問い合わせる場合にチェック。右欄でエンドポイントパスを指定可能、省略時は /dns-query)</label>
+                </div>
+                <div>
                     <button type="submit">DNSメッセージを送信</button> 
                     <button type="button" id="qmini-reset">Qminiリセット</button>
                 </div>

@@ -7,6 +7,20 @@
     const applicationUrl = new URL('./', document.baseURI);
     const apiUrl = new URL('api/query', applicationUrl);
 
+    const tcpCheckbox = form.elements.namedItem('tcp');
+    const httpsCheckbox = form.elements.namedItem('https');
+    const httpsPathInput = form.elements.namedItem('httpspath');
+
+    const syncTransportControls = () => {
+        httpsPathInput.disabled = !httpsCheckbox.checked;
+        if (httpsCheckbox.checked) {
+            tcpCheckbox.checked = false;
+            tcpCheckbox.disabled = true;
+        } else {
+            tcpCheckbox.disabled = false;
+        }
+    };
+
     const restoreForm = (params) => {
         for (const [name, value] of params) {
             const control = form.elements.namedItem(name);
@@ -20,6 +34,7 @@
                 control.value = value;
             }
         }
+        syncTransportControls();
     };
 
     const setPanelVisible = (visible) => {
@@ -63,6 +78,9 @@
     });
 
     toggle.addEventListener('click', () => setPanelVisible(searchPanel.hidden));
+
+    httpsCheckbox.addEventListener('change', syncTransportControls);
+    syncTransportControls();
 
     results.addEventListener('click', (event) => {
         const link = event.target.closest('a[data-dns-query-link]');
