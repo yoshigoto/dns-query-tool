@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { EventEmitter } = require('node:events');
 const test = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
 const dnsPacket = require('dns-packet');
 const {
     analyzeDnsPacketError,
@@ -36,12 +38,26 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
     assert.equal(isInvalidQueryType('A'), false);
     assert.equal(isInvalidQueryType('AXFR'), false);
     assert.equal(isInvalidQueryType('IXFR'), false);
+    assert.equal(isInvalidQueryType('NSEC3PARAM'), false);
+    assert.equal(isInvalidQueryType('TA'), false);
     assert.equal(isInvalidQueryType('UNKNOWN_65280'), true);
     assert.equal(isInvalidQueryType('NOT_A_TYPE'), true);
     assert.equal(buildDnsFlags(true, true), dnsPacket.RECURSION_DESIRED | dnsPacket.CHECKING_DISABLED);
     assert.equal(reverseIPv4('192.0.2.4'), '4.2.0.192');
     assert.equal(reverseIPv4('192.0.2.256'), '');
     assert.equal(reverseIPv6('2001:db8::1'), '1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2');
+});
+
+test('クエリータイプの選択肢は dns-packet の全対応型を含み、特別な型を所定位置に置く', () => {
+    const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    const optionValues = [...indexHtml.matchAll(/<option value="([^"]+)">/g)].map(([, value]) => value);
+    const packetTypes = Object.keys(dnsPacket.types || {}).filter(type => /^[A-Z][A-Z0-9]*$/.test(type));
+
+    for (const type of packetTypes) {
+        assert.ok(optionValues.includes(type), `${type} が選択肢にありません`);
+    }
+    assert.equal(optionValues[optionValues.indexOf('PTR') + 1], 'PTR-x');
+    assert.equal(optionValues.at(-1), 'VERSION');
 });
 
 test('RFCに基づくドメイン名の入力検証 (validateDomainName)', () => {

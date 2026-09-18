@@ -44,29 +44,61 @@
                 </div>
                 <div><label for="type" class="label-wide">クエリータイプ (type):</label>
                     <select id="type" name="type">
-                        <option value="A">A (IPv4 address)</option>
-                        <option value="AAAA">AAAA (IPv6 address)</option>
-                        <option value="MX">MX (Mail Exchange)</option>
-                        <option value="NS">NS (Name Server)</option>
-                        <option value="SOA">SOA (Start Of Authority)</option>
-                        <option value="TXT">TXT (Text)</option>
-                        <option value="CNAME">CNAME (Canonical Name)</option>
-                        <option value="DNAME">DNAME (Delegation Name)</option>
-                        <option value="CAA">CAA (Certification Authority Authorization)</option>
-                        <option value="DNSKEY">DNSKEY</option>
-                        <option value="DS">DS (Delegation Signer)</option>
-                        <option value="NSEC">NSEC (NextSECure record)</option>
-                        <option value="NSEC3">NSEC3</option>
-                        <option value="RRSIG">RRSIG (Resource Record Signature)</option>
-                        <option value="SRV">SRV (Service)</option>
-                        <option value="HTTPS">HTTPS</option>
-                        <option value="SVCB">SVCB (Service Binding)</option>
-                        <option value="TLSA">TLSA (DANE TLSA)</option>
-                        <option value="SSHFP">SSHFP (SSH Public Key Fingerprint)</option>
-                        <option value="NAPTR">NAPTR (Naming Authority Pointer)</option>
-                        <option value="PTR">PTR (Pointer - 4.2.0.192.in-addr.arpa)</option>
-                        <option value="PTR-x">PTR-x (Pointer - 192.0.2.4)</option>
-                        <option value="ANY">ANY</option>
+                        <optgroup label="よく使うタイプ">
+                            <option value="A">A (IPv4 address)</option>
+                            <option value="AAAA">AAAA (IPv6 address)</option>
+                            <option value="CNAME">CNAME (Canonical Name)</option>
+                            <option value="MX">MX (Mail Exchange)</option>
+                            <option value="NS">NS (Name Server)</option>
+                            <option value="TXT">TXT (Text)</option>
+                            <option value="SOA">SOA (Start Of Authority)</option>
+                            <option value="PTR">PTR (Pointer - 4.2.0.192.in-addr.arpa)</option>
+                            <option value="PTR-x">PTR-x (Pointer - 192.0.2.4)</option>
+                            <option value="SRV">SRV (Service)</option>
+                            <option value="CAA">CAA (Certification Authority Authorization)</option>
+                            <option value="ANY">ANY</option>
+                        </optgroup>
+                        <optgroup label="DNSSEC">
+                            <option value="DS">DS (Delegation Signer)</option>
+                            <option value="DNSKEY">DNSKEY</option>
+                            <option value="RRSIG">RRSIG (Resource Record Signature)</option>
+                            <option value="NSEC">NSEC (NextSECure record)</option>
+                            <option value="NSEC3">NSEC3</option>
+                            <option value="NSEC3PARAM">NSEC3PARAM</option>
+                            <option value="CDS">CDS</option>
+                            <option value="CDNSKEY">CDNSKEY</option>
+                            <option value="TA">TA (Trust Anchor)</option>
+                            <option value="DLV">DLV (DNSSEC Lookaside Validation)</option>
+                        </optgroup>
+                        <optgroup label="サービスと証明書">
+                            <option value="TLSA">TLSA (DANE TLSA)</option>
+                            <option value="SSHFP">SSHFP (SSH Public Key Fingerprint)</option>
+                            <option value="NAPTR">NAPTR (Naming Authority Pointer)</option>
+                            <option value="CERT">CERT</option>
+                            <option value="IPSECKEY">IPSECKEY</option>
+                            <option value="HIP">HIP</option>
+                            <option value="DHCID">DHCID</option>
+                        </optgroup>
+                        <optgroup label="その他のリソースレコード">
+                            <option value="DNAME">DNAME (Delegation Name)</option>
+                            <option value="NULL">NULL</option>
+                            <option value="HINFO">HINFO</option>
+                            <option value="RP">RP (Responsible Person)</option>
+                            <option value="AFSDB">AFSDB</option>
+                            <option value="SIG">SIG</option>
+                            <option value="KEY">KEY</option>
+                            <option value="LOC">LOC</option>
+                            <option value="KX">KX</option>
+                            <option value="OPT">OPT</option>
+                            <option value="APL">APL</option>
+                            <option value="SPF">SPF</option>
+                        </optgroup>
+                        <optgroup label="ゾーン転送とトランザクション">
+                            <option value="IXFR">IXFR (Incremental Zone Transfer)</option>
+                            <option value="AXFR">AXFR (Zone Transfer)</option>
+                            <option value="TKEY">TKEY</option>
+                            <option value="TSIG">TSIG</option>
+                        </optgroup>
                         <option value="VERSION">VERSION (CHAOS/TXT/version.bind)</option>
                     </select>
                 </div>

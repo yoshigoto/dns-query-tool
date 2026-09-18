@@ -1301,8 +1301,7 @@ const isInvalidUdpSize = (udpSize) => {
 };
 
 const isInvalidQueryType = (queryType) => {
-    const allowedTypes = ['A', 'AAAA', 'MX', 'NS', 'SOA', 'TXT', 'CNAME', 'DNAME', 'CAA', 'DNSKEY', 'DS', 'NSEC', 'NSEC3', 'RRSIG', 'SRV', 'HTTPS', 'SVCB', 'PTR', 'PTR-x', 'ANY', 'VERSION', 'TLSA', 'SSHFP', 'NAPTR'];
-    if (allowedTypes.includes(queryType)) {
+    if (queryType === 'PTR-x' || queryType === 'VERSION') {
         return false;
     }
 
