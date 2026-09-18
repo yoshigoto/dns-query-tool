@@ -173,8 +173,14 @@
                 <div>
                     <label for="https" class="label-wide">HTTPS送受信:</label>
                     <input type="checkbox" id="https" name="https" value="1">
-                    <input type="text" class="input-wide" id="httpspath" name="httpspath" placeholder="/dns-query" disabled>
-                    <label class="label-description" for="httpspath">(DoHで問い合わせる場合にチェック、右欄でエンドポイントパスを指定可能)</label>
+                    <label class="label-description" for="https">(DoHで問い合わせたいときはチェック)</label>
+                </div>
+                <div class="option-group">
+                    <div class="option-div">
+                        <label for="httpspath" class="label-wide">DoHエンドポイントパス:</label>
+                        <input type="text" class="input-wide" id="httpspath" name="httpspath" placeholder="/dns-query" disabled>
+                        <label class="label-description" for="httpspath">(省略時は /dns-query)</label>
+                    </div>
                 </div>
                 <div>
                     <button type="submit">DNSメッセージを送信</button> 
