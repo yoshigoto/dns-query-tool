@@ -135,7 +135,7 @@ test('MQTYPEの検証と型コード変換', () => {
     assert.match(validateMQType('65536', 'A', 'IN'), /無効な QTYPE/);
 });
 
-test('QUESTION SECTIONがなくても要求値を表示する', () => {
+test('QUESTION SECTIONが無いときは警告を表示する', () => {
     const html = makeHtmlFromDns({
         id: 100,
         flags: 0,
@@ -147,8 +147,7 @@ test('QUESTION SECTIONがなくても要求値を表示する', () => {
     }, 12, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /<strong>\[A\]<\/strong> example\.com <code>IN<\/code>/);
-    assert.match(html, /応答に QUESTION SECTION が存在しませんでした。ここでは入力値を表示しています。/);
+    assert.match(html, /応答に QUESTION SECTION が存在しませんでした。/);
 });
 
 test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {

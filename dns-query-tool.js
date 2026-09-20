@@ -673,12 +673,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         });
         html += '</ul>';
     } else {
-        questionName = domainName;
-        questionType = queryType;
-        questionClass = queryClass;
-        html += `<ul><li style="color: red;"><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code></li>`;
-        html += `<ul><li style="color: red; margin: 0;">応答に QUESTION SECTION が存在しませんでした。ここでは入力値を表示しています。</li></ul>`;
-        html += '</ul>';
+        html += wrapSectionNoticeHtml(`<p style="color: red; margin: 0;">応答に QUESTION SECTION が存在しませんでした。</p>`);
     }
 
     // ANSWER SECTION について応答コードに応じた条件分岐
