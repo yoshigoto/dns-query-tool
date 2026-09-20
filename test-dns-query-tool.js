@@ -65,6 +65,18 @@ test('クエリータイプの選択肢は dns-packet の全対応型を含み�
     assert.equal(optionValues.includes('VERSION'), false);
 });
 
+test('クエリークラスはメニューで選択する', () => {
+    const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    const classSelect = /<select id="class" name="class">([\s\S]*?)<\/select>/.exec(indexHtml);
+
+    assert.ok(classSelect, 'クエリークラスの select がありません');
+    const classOptions = [...classSelect[1].matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value);
+
+    assert.deepEqual(classOptions, ['IN', 'CS', 'CH', 'HS', 'ANY']);
+    assert.match(classSelect[1], /<option value="IN" selected>/);
+    assert.doesNotMatch(indexHtml, /<input[^>]+name="class"/);
+});
+
 test('RFCに基づくドメイン名の入力検証 (validateDomainName)', () => {
     // 正常系
     assert.equal(validateDomainName('example.com'), null);

@@ -102,7 +102,13 @@
                     </select>
                 </div>
                 <div><label for="class" class="label-wide">クエリークラス (class):</label>
-                    <input type="text" class="input-wide" id="class" name="class" value="IN" placeholder="IN" required>
+                    <select id="class" name="class">
+                        <option value="IN" selected>IN (Internet)</option>
+                        <option value="CS">CS (CSNET)</option>
+                        <option value="CH">CH (CHAOS)</option>
+                        <option value="HS">HS (Hesiod)</option>
+                        <option value="ANY">ANY</option>
+                    </select>
                 </div>
                 <div>
                     <label for="rd" class="label-wide">再帰検索の要求 (RD):</label>
