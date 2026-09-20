@@ -614,14 +614,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += '<div class="result"><h3>--- DNSレスポンス解析結果 ---</h3>';
     html += '<p><strong>基本情報:</strong></p>';
     html += '<ul>';
-    html += `<li>プロトコル: <code>${sendHttps ? 'HTTPS' : (sendTcp ? 'TCP' : 'UDP')}</code> / 応答サイズ: <code>${bytesRead}</code>byte</li>`;
+    html += `<li>対象ドメイン名: <code>${escapeHtml(domainName)}</code></li>`;
     html += `<li>応答したサーバー: <code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></li>`;
+    html += `<li>プロトコル: <code>${sendHttps ? 'HTTPS' : (sendTcp ? 'TCP' : 'UDP')}</code> / 応答サイズ: <code>${bytesRead}</code>byte</li>`;
     html += `<li>クエリーID: <code>${queryId} (${response.id === queryId ? '一致' : '<span style="color: red;">不一致</span>'})</code></li>`;
     const opcodeStr = getOpcodeName(response);
     html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: orange;">(QUERY 以外の Opcode です)</span>' : ''}</li>`;
-    if (response.type === 'query') {
-        html += `<li style="color: orange;">QR: <code>0 (Query)</code> - 応答メッセージですが QR ビットが 0 (Query) になっています</li>`;
-    }
 
     // 応答コード (rcode) の取得。Extended RCODE は OPT の TTL 上位オクテットから合成する。
     const rcode = getResponseRcode(response);
@@ -629,6 +627,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
 
     // フラグの取得
     let flagString = '';
+    if (response.type === 'response') {
+        flagString += '<span title="Query / Response">QR</span> ';
+    }
     if (response.flags & dnsPacket.RECURSION_DESIRED) {
         flagString += '<span title="Recursion Desired">RD</span> ';
     }
@@ -659,6 +660,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             true, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
         html += `<ul><li style="color: blue; margin: 0;">TCフラグが立っているので TCPでの再確認を推奨します。${displayData} をクリックしてみてください。</li></ul>`;
     }
+    if (response.type === 'query') {
+        html += `<ul><li style="color: orange;">QR: <code>0 (Query)</code> - 応答メッセージですが QR ビットが 0 (Query) になっています</li></ul>`;
+    }
     html += '</ul>';
 
     // QUESTION SECTION
@@ -670,7 +674,13 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             questionType = replaceUnknownRrTypeToKnown(question.type);
             questionClass = question.class || 'IN';
             html += `<li><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code>${qnameMinimisation ? `<span style="font-size: 90%;"> (ラベル位置: <code>${escapeHtml(qnamePosition)}</code>)</span>` : ''}</li>`;
+            if (questionName !== domainName) {
+                html += `<ul><li style="color: red; margin: 0;">QUESTION SECTION のドメイン名が「対象ドメイン名」<code>${escapeHtml(domainName)}</code> と一致しませんでした。</li></ul>`;
+            }
         });
+        if (response.questions.length > 1) {
+            html += `<ul><li style="color: red; margin: 0;">QUESTION SECTION に複数の質問が含まれています。</li></ul>`;
+        }
         html += '</ul>';
     } else {
         html += wrapSectionNoticeHtml(`<p style="color: red; margin: 0;">応答に QUESTION SECTION が存在しませんでした。</p>`);
