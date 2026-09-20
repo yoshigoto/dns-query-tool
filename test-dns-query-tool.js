@@ -504,6 +504,24 @@ test('クエリークラスをDNSメッセージと再検索リンクに反映�
     assert.match(html, /version\.bind <code>CH<\/code>/);
 });
 
+test('各リソースレコードセクションで CLASS を表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'A', class: 'CH' }],
+        answers: [{ name: 'example.com', type: 'TXT', class: 'CH', data: 'answer text', ttl: 60 }],
+        authorities: [{ name: 'example.com', type: 'NS', class: 'HS', data: 'ns.example.com', ttl: 300 }],
+        additionals: [{ name: 'ns.example.com', type: 'A', class: 'IN', data: '192.0.2.53', ttl: 300 }]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /<strong>\[A\]<\/strong> example\.com <code>CH<\/code>/);
+    assert.match(html, /<strong>\[TXT\]<\/strong> example\.com <code>CH<\/code>/);
+    assert.match(html, /<strong>\[NS\]<\/strong> example\.com <code>HS<\/code>/);
+    assert.match(html, /<strong>\[A\]<\/strong> ns\.example\.com <code>IN<\/code>/);
+});
+
 test('UDP問い合わせは不一致IDと不正な送信元の応答を無視する', async () => {
     const createSocket = () => {
         const socket = new EventEmitter();

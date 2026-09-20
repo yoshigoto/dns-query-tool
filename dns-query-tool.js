@@ -793,7 +793,8 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                 }
             }
             const answerType = replaceUnknownRrTypeToKnown(escapeHtml(answer.type));
-            html += `<li><span style="color: #dd0000;"><strong>[${answerType}]</strong> ${escapeHtml(answer.name)}</span> &rarr; <code>${displayData}</code> (TTL: ${parseInt(answer.ttl, 10)}秒)</li>`;
+            const answerClass = answer.class || 'IN';
+            html += `<li><span style="color: #dd0000;"><strong>[${answerType}]</strong> ${escapeHtml(answer.name)} <code>${escapeHtml(answerClass)}</code></span> &rarr; <code>${displayData}</code> (TTL: ${parseInt(answer.ttl, 10)}秒)</li>`;
         });
         html += '</ul>';
     }
@@ -817,7 +818,8 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                 }
             }
             const authoritiesType = replaceUnknownRrTypeToKnown(escapeHtml(authorities.type));
-            html += `<li><strong>[${authoritiesType}]</strong> ${escapeHtml(authorities.name)} &rarr; <code>${displayData}</code> (TTL: ${parseInt(authorities.ttl, 10)}秒)</li>`;
+            const authoritiesClass = authorities.class || 'IN';
+            html += `<li><strong>[${authoritiesType}]</strong> ${escapeHtml(authorities.name)} <code>${escapeHtml(authoritiesClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(authorities.ttl, 10)}秒)</li>`;
         });
         html += '</ul>';
     } else {
@@ -1003,7 +1005,8 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             if (additionals.type !== 'OPT') {
                 // EDNS0 は下で表示する
                 const additionalsType = replaceUnknownRrTypeToKnown(escapeHtml(additionals.type));
-                html += `<li><strong>[${additionalsType}]</strong> ${escapeHtml(additionals.name)} &rarr; <code>${displayData}</code> (TTL: ${parseInt(additionals.ttl, 10)}秒)</li>`;
+                const additionalsClass = additionals.class || 'IN';
+                html += `<li><strong>[${additionalsType}]</strong> ${escapeHtml(additionals.name)} <code>${escapeHtml(additionalsClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(additionals.ttl, 10)}秒)</li>`;
             }
         });
         html += '</ul>';
