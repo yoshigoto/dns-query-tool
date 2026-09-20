@@ -608,6 +608,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     let html = '';
     let questionName = '';
     let questionType = '';
+    let questionClass = '';
     const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass);
 
     html += '<div class="result"><h3>--- DNSレスポンス解析結果 ---</h3>';
@@ -667,14 +668,16 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         response.questions.forEach((question) => {
             questionName = question.name;
             questionType = replaceUnknownRrTypeToKnown(question.type);
-            const questionClass = question.class || 'IN';
+            questionClass = question.class || 'IN';
             html += `<li><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code>${qnameMinimisation ? `<span style="font-size: 90%;"> (ラベル位置: <code>${escapeHtml(qnamePosition)}</code>)</span>` : ''}</li>`;
         });
         html += '</ul>';
     } else {
         questionName = domainName;
         questionType = queryType;
-        html += `<ul><li style="color: red;"><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} - クエリータイプ: <code>${escapeHtml(questionType)}</code>、応答に QUESTION SECTION が存在しません</li></ul>`;
+        questionClass = queryClass;
+        html += `<ul><li style="color: red;"><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code></li></ul>`;
+        html += `<p style="color: red; margin: 0;">応答に QUESTION SECTION が存在しませんでした。ここでは入力値を表示しています。</p>`;
     }
 
     // ANSWER SECTION について応答コードに応じた条件分岐

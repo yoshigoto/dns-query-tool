@@ -147,9 +147,8 @@ test('QUESTION SECTIONがなくても要求値を表示する', () => {
     }, 12, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /応答に QUESTION SECTION が存在しません/);
-    assert.match(html, /example\.com/);
-    assert.match(html, /クエリータイプ: <code>A<\/code>/);
+    assert.match(html, /<strong>\[A\]<\/strong> example\.com <code>IN<\/code>/);
+    assert.match(html, /応答に QUESTION SECTION が存在しませんでした。ここでは入力値を表示しています。/);
 });
 
 test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
