@@ -10,6 +10,7 @@ const {
     buildDnsFlags,
     getDnsTypeCode,
     isInvalidDnsServer,
+    isInvalidQueryClass,
     isInvalidQueryType,
     isInvalidUdpSize,
     makeHtmlFromDns,
@@ -41,7 +42,11 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
     assert.equal(isInvalidQueryType('NSEC3PARAM'), false);
     assert.equal(isInvalidQueryType('TA'), false);
     assert.equal(isInvalidQueryType('UNKNOWN_65280'), true);
+    assert.equal(isInvalidQueryType('VERSION'), true);
     assert.equal(isInvalidQueryType('NOT_A_TYPE'), true);
+    assert.equal(isInvalidQueryClass('IN'), false);
+    assert.equal(isInvalidQueryClass('CH'), false);
+    assert.equal(isInvalidQueryClass('BAD'), true);
     assert.equal(buildDnsFlags(true, true), dnsPacket.RECURSION_DESIRED | dnsPacket.CHECKING_DISABLED);
     assert.equal(reverseIPv4('192.0.2.4'), '4.2.0.192');
     assert.equal(reverseIPv4('192.0.2.256'), '');
@@ -57,7 +62,7 @@ test('クエリータイプの選択肢は dns-packet の全対応型を含み�
         assert.ok(optionValues.includes(type), `${type} が選択肢にありません`);
     }
     assert.equal(optionValues[optionValues.indexOf('PTR') + 1], 'PTR-x');
-    assert.equal(optionValues.at(-1), 'VERSION');
+    assert.equal(optionValues.includes('VERSION'), false);
 });
 
 test('RFCに基づくドメイン名の入力検証 (validateDomainName)', () => {
@@ -113,7 +118,7 @@ test('MQTYPEの検証と型コード変換', () => {
     assert.equal(validateMQType('A, AAAA, MX', 'A', 'IN'), '');
     assert.equal(validateMQType('EMPTY', 'A', 'IN'), '');
     assert.match(validateMQType('A,,AAAA', 'A', 'IN'), /リストが空/);
-    assert.match(validateMQType('A', 'VERSION', 'CH'), /IN クラス/);
+    assert.match(validateMQType('A', 'TXT', 'CH'), /IN クラス/);
     assert.match(validateMQType('0', 'A', 'IN'), /無効な QTYPE/);
     assert.match(validateMQType('65536', 'A', 'IN'), /無効な QTYPE/);
 });
@@ -439,6 +444,52 @@ test('UDPのTCフラグを受けるとTCP応答へ切り替える', async () => 
 
     assert.equal(await queryAuthoritativeServer('8.8.8.8', 'example.com', 'A', createSocket, queryOverTcp), tcpResponse);
     assert.deepEqual(tcpQuery.questions, [{ name: 'example.com', type: 'A', class: 'IN' }]);
+});
+
+test('クエリークラスをDNSメッセージと再検索リンクに反映する', async () => {
+    const udpResponse = dnsPacket.encode({
+        type: 'response',
+        flags: dnsPacket.TRUNCATED_RESPONSE,
+        questions: [{ name: 'version.bind', type: 'TXT', class: 'CH' }]
+    });
+    const createSocket = () => {
+        const socket = new EventEmitter();
+        socket.close = () => {};
+        socket.send = (...args) => {
+            args.at(-1)();
+            const query = dnsPacket.decode(args[0]);
+            const response = dnsPacket.encode({
+                ...dnsPacket.decode(udpResponse),
+                id: query.id,
+                questions: query.questions
+            });
+            queueMicrotask(() => socket.emit('message', response));
+        };
+        return socket;
+    };
+    const tcpResponse = { id: 1, answers: [] };
+    let tcpQuery;
+    const queryOverTcp = async (address, query) => {
+        tcpQuery = query;
+        return tcpResponse;
+    };
+
+    assert.equal(await queryAuthoritativeServer('8.8.8.8', 'version.bind', 'TXT', createSocket, queryOverTcp, false, 'CH'), tcpResponse);
+    assert.deepEqual(tcpQuery.questions, [{ name: 'version.bind', type: 'TXT', class: 'CH' }]);
+
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: dnsPacket.TRUNCATED_RESPONSE,
+        rcode: 'NOERROR',
+        questions: [{ name: 'version.bind', type: 'TXT', class: 'CH' }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'version.bind', 'TXT', 100,
+    false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A', null, 'CH');
+
+    assert.match(html, /class=CH/);
+    assert.match(html, /version\.bind <code>CH<\/code>/);
 });
 
 test('UDP問い合わせは不一致IDと不正な送信元の応答を無視する', async () => {
@@ -864,7 +915,7 @@ test('rdata-opt-truncated の生パケットで OPTION-LENGTH 超過による WA
         decoded, rawMsg.length, 'http://localhost:3000', '/api/query', 'ns2.ldns.jp', '160.16.111.88',
         'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 1234,
         false, false, false, false, false, '', true, false, '1232', false,
-        '', false, '255', 'A', '', rawMsg
+        '', false, '255', 'A', rawMsg
     );
 
     assert.match(html, /WARNING SECTION/);
