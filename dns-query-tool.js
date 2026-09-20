@@ -626,18 +626,6 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += `<li style="color: orange;">QR: <code>0 (Query)</code> - 応答メッセージですが QR ビットが 0 (Query) になっています</li>`;
     }
 
-    if (response.questions && response.questions.length > 0) {
-        response.questions.forEach((question) => {
-            questionName = question.name;
-            questionType = replaceUnknownRrTypeToKnown(question.type);
-            html += `<li>クエリー名: <code>${escapeHtml(questionName)}</code>${qnameMinimisation ? `<span style="font-size: 90%;"> (ラベル位置: <code>${escapeHtml(qnamePosition)}</code>)</span>` : ''}</li>`;
-            html += `<li>クエリータイプ: <code>${escapeHtml(questionType)}</code></li>`;
-        });
-    } else {
-        html += `<li style="color: red;">クエリー名: <code>${escapeHtml(domainName)}</code> - 応答に QUESTION SECTION が存在しません</li>`;
-        html += `<li style="color: red;">クエリータイプ: <code>${escapeHtml(queryType)}</code> - 応答に QUESTION SECTION が存在しません</li>`;
-    }
-
     // 応答コード (rcode) の取得。Extended RCODE は OPT の TTL 上位オクテットから合成する。
     const rcode = getResponseRcode(response);
     html += `<li>応答ステータス (rcode): <code>${escapeHtml(rcode)}</code></li>`;
@@ -676,7 +664,24 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     }
     html += '</ul>';
 
-    // Answerセクションについて応答コードに応じた条件分岐
+    // QUESTION SECTION
+    html += `<p><strong>QUESTION SECTION (${response.questions?.length || 0} 個) :</strong></p>`;
+    if (response.questions && response.questions.length > 0) {
+        html += '<ul>';
+        response.questions.forEach((question) => {
+            questionName = question.name;
+            questionType = replaceUnknownRrTypeToKnown(question.type);
+            const questionClass = question.class || 'IN';
+            html += `<li><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code>${qnameMinimisation ? `<span style="font-size: 90%;"> (ラベル位置: <code>${escapeHtml(qnamePosition)}</code>)</span>` : ''}</li>`;
+        });
+        html += '</ul>';
+    } else {
+        questionName = domainName;
+        questionType = queryType;
+        html += `<ul><li style="color: red;"><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} - クエリータイプ: <code>${escapeHtml(questionType)}</code>、応答に QUESTION SECTION が存在しません</li></ul>`;
+    }
+
+    // ANSWER SECTION について応答コードに応じた条件分岐
     html += `<p><strong style="color: ${response.answers.length > 0 ? '#dd0000' : '#0000dd'};">ANSWER SECTION (${response.answers.length} 個) :</strong></p>`;
     let answerNoticeHtml = '';
     if (rcode === 'SERVFAIL') {
@@ -797,7 +802,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += '</ul>';
     }
 
-    // Authorityが返ってきた場合
+    // AUTHORITY が返ってきた場合
     html += `<p><strong>AUTHORITY SECTION (${response.authorities.length} 個) :</strong></p>`;
     if (response.authorities && response.authorities.length > 0) {
         html += '<ul>';
@@ -823,7 +828,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += wrapSectionNoticeHtml('<p style="color: orange; margin: 0;">権威サーバーの情報は見つかりませんでした。</p>');
     }
 
-    // Additionalが返ってきた場合
+    // ADDITIONAL が返ってきた場合
     html += `<p><strong>ADDITIONAL SECTION (${response.additionals.length} 個) :</strong></p>`;
     if (response.additionals && response.additionals.length > 0) {
         let optPseudo = '';
