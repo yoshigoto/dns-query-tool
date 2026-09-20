@@ -661,7 +661,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += `<ul><li style="color: blue; margin: 0;">TCフラグが立っているので TCPでの再確認を推奨します。${displayData} をクリックしてみてください。</li></ul>`;
     }
     if (response.type === 'query') {
-        html += `<ul><li style="color: orange;">QR: <code>0 (Query)</code> - 応答メッセージですが QR ビットが 0 (Query) になっています</li></ul>`;
+        html += `<ul><li style="color: orange;">QR: <code>0 (Query)</code> - 応答 (response) メッセージですが QRフラグが 0 (Query) になっています</li></ul>`;
     }
     html += '</ul>';
 
