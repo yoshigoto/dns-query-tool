@@ -18,10 +18,12 @@ load_rc_config "$name"
 : ${dns_query_tool_pidfile:="/var/run/${name}.pid"}
 : ${dns_query_tool_log:="/var/log/${name}.log"}
 
+user_name="www"
 pidfile="${dns_query_tool_pidfile}"
+logfile="${dns_query_tool_log}"
 command="/usr/sbin/daemon"
-command_args="-f -p ${pidfile} -o ${dns_query_tool_log} ${dns_query_tool_node} ${dns_query_tool_chdir}/${dns_query_tool_script}"
-stop_cmd=${name}_stop
+command_args="-f -p ${pidfile} -u ${user_name} -o ${logfile} ${dns_query_tool_node} ${dns_query_tool_script}"
+stop_cmd="${name}_stop"
 
 dns_query_tool_stop() {
 	test -e ${pidfile} && kill "$(cat ${pidfile})"
