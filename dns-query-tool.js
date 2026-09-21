@@ -1860,7 +1860,7 @@ const server = http.createServer(async (req, res) => {
 
     // 画面表示用にすべての入力値をエスケープ (サニタイズ)
     const dnsServer = escapeHtml(rawDnsServer.trim());
-    let domainName = escapeHtml(rawDomainName.trim());
+    let domainName = escapeHtml(rawDomainName.trim().replace(/\\/g, ''));
     let queryType = escapeHtml(rawQueryType);
     const queryClass = escapeHtml(rawQueryClass.trim().toUpperCase());
     let qnamePosition = escapeHtml(rawQnamePosition.trim());
