@@ -222,7 +222,7 @@ test('MQTYPE応答を表示し、形式不正を警告する', () => {
     assert.match(render(createResponse(Buffer.from([0, 28, 0]))), /RFC 10029 の形式に適合していません/);
 });
 
-test('EDNS optionをraw表示し、NSIDをhexで表示する', () => {
+test('EDNS optionをraw表示し、NSIDをhexと文字列で表示する', () => {
     const html = makeHtmlFromDns({
         id: 100,
         flags: 0,
@@ -236,7 +236,7 @@ test('EDNS optionをraw表示し、NSIDをhexで表示する', () => {
             udpPayloadSize: 1232,
             flags: 0,
             options: [
-                { code: 3, data: Buffer.from([0xff, 0x00, 0x41]) },
+                { code: 3, data: Buffer.from('nsid-01') },
                 { code: 10, data: Buffer.from([0x01, 0x02]) },
                 { code: 65001, data: Buffer.alloc(0) }
             ]
@@ -244,10 +244,9 @@ test('EDNS optionをraw表示し、NSIDをhexで表示する', () => {
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /\[NSID\]<\/strong> <code>ff0041<\/code>/);
+    assert.match(html, /\[NSID\]<\/strong> <code>hex: 6e7369642d3031, text: nsid-01<\/code>/);
     assert.match(html, /OPTION_10 \(10\): 0102/);
     assert.match(html, /OPTION_65001 \(65001\): \(empty\)/);
-    assert.doesNotMatch(html, /�/);
 });
 test('EDNS0 の DO フラグおよび CO フラグ (Compact Answers OK) を正しく解析・表示する', () => {
     const html = makeHtmlFromDns({
