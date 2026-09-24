@@ -674,7 +674,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             questionType = replaceUnknownRrTypeToKnown(question.type);
             questionClass = question.class || 'IN';
             html += `<li><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code>${qnameMinimisation ? `<span style="font-size: 90%;"> (ラベル位置: <code>${escapeHtml(qnamePosition)}</code>)</span>` : ''}</li>`;
-            if (questionName !== domainName) {
+            if ((questionName !== domainName) && !qnameMinimisation) {
                 html += `<ul><li style="color: red; margin: 0;">QUESTION SECTION のドメイン名が「対象ドメイン名」<code>${escapeHtml(domainName)}</code> と一致しませんでした。</li></ul>`;
             }
         });
