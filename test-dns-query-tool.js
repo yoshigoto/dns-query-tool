@@ -916,7 +916,7 @@ test('RFC 2308 ネガティブキャッシュ (Negative Caching) の TTL 算出�
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /RFC 2308 \(Negative Caching\): ネガティブキャッシュ有効期間 \(TTL\) は <code>60秒<\/code>/);
+    assert.match(html, /ネガティブキャッシュ有効期間 \(TTL\) は <code>60秒<\/code>/);
 });
 
 test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証する', () => {

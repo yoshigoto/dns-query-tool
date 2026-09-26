@@ -213,7 +213,7 @@ const getNegativeCacheHtml = (response) => {
             const soaTtl = parseInt(soaRecord.ttl, 10);
             const minimum = parseInt(soaRecord.data.minimum, 10);
             const negTtl = Math.min(soaTtl, minimum);
-            return `<p style="color: #555555; margin: 0;">※RFC 2308 (Negative Caching): ネガティブキャッシュ有効期間 (TTL) は <code>${negTtl}秒</code> (MINIMUM: ${minimum}秒, SOA TTL: ${soaTtl}秒 の最小値) です。</p>`;
+            return `<p style="color: #555555; margin: 0;">※ネガティブキャッシュ有効期間 (TTL) は <code>${negTtl}秒</code> (MINIMUM: ${minimum}秒, SOA TTL: ${soaTtl}秒 の最小値) です。</p>`;
         }
     }
     return '';
@@ -711,17 +711,15 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         if (qnameMinimisation) {
             if (qnamePosition > 0) {
                 qnamePosition--;
-                const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
                 if (response.authorities && response.authorities.length > 0) {
                     const soaRr = response.authorities.find(at => at.type === 'SOA');
                     if (soaRr) {
                         if (soaRr.name !== questionName) {
                             answerNoticeHtml += `<p style="color: red; margin: 0;">※応答したサーバー <code>${escapeHtml(dnsServer)}</code> が RFC 8020 に対応していないようです。</p>`;
-                            answerNoticeHtml += `<p style="color: orange; margin: 0;">※Empty Non-Terminal かもしれません。${displayData} をクリックしてみてください。</p>`;
-                        } else {
-                            answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
                         }
+                        const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
+                            sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
+                        answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
                     }
                 }
             }
@@ -738,16 +736,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             if (qnameMinimisation) {
                 if (qnamePosition > 0) {
                     qnamePosition--;
-                    const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
                     if (response.authorities && response.authorities.length > 0) {
                         const soaRr = response.authorities.find(at => at.type === 'SOA');
                         if (soaRr) {
-                            if (soaRr.name !== questionName) {
-                                answerNoticeHtml += `<p style="color: orange; margin: 0;">※Empty Non-Terminal かもしれません。${displayData} をクリックしてみてください。</p>`;
-                            } else {
-                                answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
-                            }
+                            const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
+                                sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
+                            answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてみてください。</p>`;
                         }
                     }
                 }
