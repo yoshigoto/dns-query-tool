@@ -151,6 +151,38 @@ test('QUESTION SECTIONが無いときは警告を表示する', () => {
     assert.match(html, /応答に QUESTION SECTION が存在しませんでした。/);
 });
 
+test('QUESTION SECTIONの名前比較は末尾ピリオドを無視する', () => {
+    const render = (questionName) => makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: questionName, type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com.', 'A', 100,
+    false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A');
+
+    assert.doesNotMatch(render('example.com'), /QUESTION SECTION のドメイン名が.*一致しませんでした/);
+    assert.doesNotMatch(render('EXAMPLE.COM.'), /QUESTION SECTION のドメイン名が.*一致しませんでした/);
+    assert.match(render('other.example.com'), /QUESTION SECTION のドメイン名が.*一致しませんでした/);
+});
+
+test('QNAME minimisationのNS名比較は末尾ピリオドを無視する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'NS' }],
+        answers: [{ name: 'example.com', type: 'NS', data: 'ns1.example.com', ttl: 300 }],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com.', 'NS', 100,
+    false, false, false, false, false, '', false, false, '1232', false, '', true, 0, 'NS');
+
+    assert.match(html, /server=a\.root-servers\.net&amp;name=ns1\.example\.com&amp;type=A/);
+});
+
 test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
     const html = makeHtmlFromDns({
         id: 100,
