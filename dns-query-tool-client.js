@@ -9,16 +9,19 @@
 
     const tcpCheckbox = form.elements.namedItem('tcp');
     const httpsCheckbox = form.elements.namedItem('https');
+    const dotCheckbox = form.elements.namedItem('dot');
     const httpsPathInput = form.elements.namedItem('httpspath');
 
-    const syncTransportControls = () => {
-        httpsPathInput.disabled = !httpsCheckbox.checked;
-        if (httpsCheckbox.checked) {
-            tcpCheckbox.checked = false;
-            tcpCheckbox.disabled = true;
-        } else {
-            tcpCheckbox.disabled = false;
+    const syncTransportControls = (changedControl = null) => {
+        if (changedControl?.checked) {
+            for (const control of [tcpCheckbox, httpsCheckbox, dotCheckbox]) {
+                if (control !== changedControl) control.checked = false;
+            }
         }
+        httpsPathInput.disabled = !httpsCheckbox.checked;
+        tcpCheckbox.disabled = httpsCheckbox.checked || dotCheckbox.checked;
+        httpsCheckbox.disabled = dotCheckbox.checked;
+        dotCheckbox.disabled = httpsCheckbox.checked;
     };
 
     const restoreForm = (params) => {
@@ -79,7 +82,9 @@
 
     toggle.addEventListener('click', () => setPanelVisible(searchPanel.hidden));
 
-    httpsCheckbox.addEventListener('change', syncTransportControls);
+    tcpCheckbox.addEventListener('change', () => syncTransportControls(tcpCheckbox));
+    httpsCheckbox.addEventListener('change', () => syncTransportControls(httpsCheckbox));
+    dotCheckbox.addEventListener('change', () => syncTransportControls(dotCheckbox));
     syncTransportControls();
 
     results.addEventListener('click', (event) => {

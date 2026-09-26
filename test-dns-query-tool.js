@@ -15,6 +15,7 @@ const {
     isInvalidUdpSize,
     makeHtmlFromDns,
     queryAuthoritativeServer,
+    queryAuthoritativeServerOverTls,
     reverseIPv4,
     reverseIPv6,
     resolveDnsServerAddress,
@@ -453,6 +454,86 @@ test('UDPのTCフラグを受けるとTCP応答へ切り替える', async () => 
 
     assert.equal(await queryAuthoritativeServer('8.8.8.8', 'example.com', 'A', createSocket, queryOverTcp), tcpResponse);
     assert.deepEqual(tcpQuery.questions, [{ name: 'example.com', type: 'A', class: 'IN' }]);
+});
+
+test('DoTはTLSの853番ポートでDNSストリームフレームを送受信する', async () => {
+    const query = {
+        type: 'query',
+        id: 1234,
+        questions: [{ name: 'example.com', type: 'A', class: 'IN' }]
+    };
+    const responseFrame = dnsPacket.streamEncode({
+        type: 'response',
+        id: query.id,
+        questions: query.questions,
+        answers: []
+    });
+    const client = new EventEmitter();
+    client.destroy = () => {};
+    let writtenBuffer;
+
+    const resultPromise = queryAuthoritativeServerOverTls('192.0.2.53', 'resolver.example', query, (options) => {
+        assert.deepEqual(options, {
+            host: '192.0.2.53',
+            port: 853,
+            servername: 'resolver.example'
+        });
+        client.write = (buffer) => { writtenBuffer = buffer; };
+        queueMicrotask(() => {
+            client.emit('secureConnect');
+            client.emit('data', responseFrame.subarray(0, 1));
+            client.emit('data', responseFrame.subarray(1));
+        });
+        return client;
+    });
+
+    const result = await resultPromise;
+    assert.deepEqual(writtenBuffer, dnsPacket.streamEncode(query));
+    assert.equal(result.response.id, query.id);
+    assert.deepEqual(result.rawBuffer, responseFrame);
+});
+
+test('DoTは接続先がIPアドレスの場合にTLS servernameを指定しない', async () => {
+    const client = new EventEmitter();
+    client.destroy = () => {};
+    const responseFrame = dnsPacket.streamEncode({
+        type: 'response',
+        id: 1234,
+        questions: [{ name: 'example.com', type: 'A', class: 'IN' }],
+        answers: []
+    });
+    const resultPromise = queryAuthoritativeServerOverTls('192.0.2.53', '192.0.2.53', {
+        type: 'query',
+        id: 1234,
+        questions: [{ name: 'example.com', type: 'A', class: 'IN' }]
+    }, (options) => {
+        assert.deepEqual(options, { host: '192.0.2.53', port: 853 });
+        client.write = () => {};
+        queueMicrotask(() => {
+            client.emit('secureConnect');
+            client.emit('data', responseFrame);
+        });
+        return client;
+    });
+
+    const result = await resultPromise;
+    assert.equal(result.response.id, 1234);
+});
+
+test('DoT応答から生成する再検索リンクにDoT設定を引き継ぐ', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'SERVFAIL',
+        questions: [{ name: 'example.com', type: 'A', class: 'IN' }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', 'resolver.example', '192.0.2.53', 'example.com', 'A', 100,
+    true, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A', null, 'IN', true);
+
+    assert.match(html, /dot=1/);
+    assert.match(html, /プロトコル: <code>DoT<\/code>/);
 });
 
 test('クエリークラスをDNSメッセージと再検索リンクに反映する', async () => {

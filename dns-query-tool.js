@@ -4,6 +4,7 @@ const path = require('path');
 const net = require('net');
 const dgram = require('dgram');
 const https = require('https');
+const tls = require('tls');
 const dnsPacket = require('dns-packet');	// https://github.com/mafintosh/dns-packet
 const dnsTypes = require('dns-packet/types');
 const dnsClasses = require('dns-packet/classes');
@@ -283,7 +284,7 @@ const escapeHtml = (str) => {
 };
 
 const addLinkToDisplayData = (origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, displayData, queryClass='IN') => {
+    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, displayData, queryClass='IN', sendDot=false) => {
     const query = new URLSearchParams({
         server: dnsServer,
         name: domainName,
@@ -294,6 +295,7 @@ const addLinkToDisplayData = (origin, pathname, dnsServer, domainName, queryType
         tcp: sendTcp ? '1' : '0',
         ipv6: sendIpv6 ? '1' : '0',
         https: sendHttps ? '1' : '0',
+        dot: sendDot ? '1' : '0',
         httpspath: httpsPath,
         edns0: edns0Enable ? '1' : '0',
         dnssec: dnssecOk ? '1' : '0',
@@ -604,19 +606,19 @@ const wrapSectionNoticeHtml = (noticeHtml) => {
 };
 
 const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsServerIp, domainName, queryType, queryId, recursionDesired, checkingDisabled,
-    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, rawBuf = null, queryClass = 'IN') => {
+    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, rawBuf = null, queryClass = 'IN', sendDot = false) => {
     let html = '';
     let questionName = '';
     let questionType = '';
     let questionClass = '';
-    const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass);
+    const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot);
 
     html += '<div class="result"><h3>--- DNSレスポンス解析結果 ---</h3>';
     html += '<p><strong>基本情報:</strong></p>';
     html += '<ul>';
     html += `<li>対象ドメイン名: <code>${escapeHtml(domainName)}</code></li>`;
     html += `<li>応答したサーバー: <code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></li>`;
-    html += `<li>プロトコル: <code>${sendHttps ? 'HTTPS' : (sendTcp ? 'TCP' : 'UDP')}</code> / 応答サイズ: <code>${bytesRead}</code>byte</li>`;
+    html += `<li>プロトコル: <code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code> / 応答サイズ: <code>${bytesRead}</code>byte</li>`;
     html += `<li>クエリーID: <code>${queryId} (${response.id === queryId ? '一致' : '<span style="color: red;">不一致</span>'})</code></li>`;
     const opcodeStr = getOpcodeName(response);
     html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: orange;">(QUERY 以外の Opcode です)</span>' : ''}</li>`;
@@ -655,7 +657,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         flagString = flagString.slice(0, -1);
     }
     html += `<li>フラグ (flags): <code>${flagString}</code></li>`;
-    if (!sendTcp && !sendHttps && (response.flags & dnsPacket.TRUNCATED_RESPONSE)) {
+    if (!sendTcp && !sendHttps && !sendDot && (response.flags & dnsPacket.TRUNCATED_RESPONSE)) {
         const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
             true, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
         html += `<ul><li style="color: blue; margin: 0;">TCフラグが立っているので TCPでの再確認を推奨します。${displayData} をクリックしてみてください。</li></ul>`;
@@ -1037,7 +1039,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     if (warningHtml) {
         html += buildWarningSectionHtml(warningHtml);
     }
-    const packetWarning = rawBuf ? analyzeDnsPacketError(rawBuf, null, sendTcp && !sendHttps) : '';
+    const packetWarning = rawBuf ? analyzeDnsPacketError(rawBuf, null, (sendTcp || sendDot) && !sendHttps) : '';
     if (packetWarning) {
         html += buildWarningSectionHtml(packetWarning);
     }
@@ -1647,6 +1649,49 @@ const queryAuthoritativeServerOverTcp = (serverAddress, query) => new Promise((r
     client.connect(53, serverAddress);
 });
 
+const queryAuthoritativeServerOverTls = (serverAddress, serverName, query, connect = tls.connect) => new Promise((resolve, reject) => {
+    const options = { host: serverAddress, port: 853 };
+    if (!net.isIP(serverName)) {
+        options.servername = serverName;
+    }
+    const client = connect(options);
+    let responseBuffer = Buffer.alloc(0);
+    let expectedLength = 0;
+    let settled = false;
+    const finish = (callback) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        client.destroy();
+        callback();
+    };
+    const timeoutId = setTimeout(() => {
+        finish(() => reject(new Error(`${serverName} から DoT 応答がありませんでした。`)));
+    }, 5000);
+
+    client.once('secureConnect', () => {
+        client.write(dnsPacket.streamEncode(query));
+    });
+    client.on('data', (data) => {
+        responseBuffer = Buffer.concat([responseBuffer, data]);
+        if (expectedLength === 0 && responseBuffer.length >= 2) {
+            expectedLength = responseBuffer.readUInt16BE(0) + 2;
+        }
+        if (expectedLength > 0 && responseBuffer.length >= expectedLength) {
+            const frame = responseBuffer.subarray(0, expectedLength);
+            try {
+                const response = dnsPacket.streamDecode(frame);
+                finish(() => resolve({ response, rawBuffer: frame }));
+            } catch (error) {
+                finish(() => reject(error));
+            }
+        }
+    });
+    client.once('error', (error) => {
+        finish(() => reject(error));
+    });
+});
+
 const queryAuthoritativeServer = (serverAddress, name, type, createSocket = dgram.createSocket,
     queryOverTcp = queryAuthoritativeServerOverTcp, sendTcp = false, queryClass = 'IN') => new Promise((resolve, reject) => {
     const query = {
@@ -1856,6 +1901,7 @@ const server = http.createServer(async (req, res) => {
     const sendTcp = params.get('tcp') === '1';
     const sendIpv6 = params.get('ipv6') === '1';
     const sendHttps = params.get('https') === '1';
+    const sendDot = params.get('dot') === '1';
     const rawHttpsPath = params.get('httpspath') || '/dns-query';
 
     // 画面表示用にすべての入力値をエスケープ (サニタイズ)
@@ -2070,7 +2116,7 @@ const server = http.createServer(async (req, res) => {
 
     let buf;
     try {
-        if (sendTcp && !sendHttps) {
+        if ((sendTcp || sendDot) && !sendHttps) {
             buf = dnsPacket.streamEncode(queryPacket);
         } else {
             buf = dnsPacket.encode(queryPacket);
@@ -2127,7 +2173,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     const bytesRead = dnsPacket.decode.bytes;
                     html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass);
+                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass, sendDot);
                 } catch (err) {
                     html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
                 } finally {
@@ -2158,6 +2204,27 @@ const server = http.createServer(async (req, res) => {
 
         httpsReq.write(buf);
         httpsReq.end();
+    } else if (sendDot) {
+        queryAuthoritativeServerOverTls(dnsServerAddress, dnsServer, queryPacket).then(({ response, rawBuffer }) => {
+            try {
+                const anomalyHtml = analyzeDnsPacketError(rawBuffer, null, true);
+                const hasResidualBytesWarning = /未消費データ|extra bytes|残っています/i.test(anomalyHtml || '');
+                if (anomalyHtml && !hasResidualBytesWarning) {
+                    throw new Error('ヘッダーのセクション件数と実際のリソースレコード数が一致しません');
+                }
+                const bytesRead = dnsPacket.streamDecode.bytes;
+                html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
+                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, rawBuffer, qClass, sendDot);
+            } catch (error) {
+                html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(error.message)}</p>${analyzeDnsPacketError(rawBuffer, error, true)}</div>`;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+        }).catch((error) => {
+            html += `<div class="result error"><p>エラー: DoT通信に失敗しました: ${escapeHtml(error.message)}</p><p>接続先がDoTに対応していない、またはTLS証明書を検証できない可能性があります。DoTを無効にして再試行してください。</p></div>`;
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+        });
     } else if (sendTcp) {
         let resultHtml = '';
         let expectedLength = 0
@@ -2219,7 +2286,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     const bytesRead = dnsPacket.streamDecode.bytes;
                     resultHtml += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, receivedBuffer, qClass);
+                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, receivedBuffer, qClass, sendDot);
                 } catch (err) {
                     html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err, true)}</div>`;
                 } finally {
@@ -2292,7 +2359,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 const bytesRead = dnsPacket.decode.bytes;
                 html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass);
+                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass, sendDot);
             } catch (err) {
                 html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
             } finally {
@@ -2347,6 +2414,7 @@ module.exports = {
     isInvalidUdpSize,
     makeHtmlFromDns,
     queryAuthoritativeServer,
+    queryAuthoritativeServerOverTls,
     reverseIPv4,
     reverseIPv6,
     resolveDnsServerAddress,
