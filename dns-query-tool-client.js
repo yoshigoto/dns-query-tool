@@ -17,6 +17,11 @@
             for (const control of [tcpCheckbox, httpsCheckbox, dotCheckbox]) {
                 if (control !== changedControl) control.checked = false;
             }
+        } else {
+            const selectedControl = [httpsCheckbox, dotCheckbox, tcpCheckbox].find((control) => control.checked);
+            for (const control of [tcpCheckbox, httpsCheckbox, dotCheckbox]) {
+                if (control !== selectedControl) control.checked = false;
+            }
         }
         httpsPathInput.disabled = !httpsCheckbox.checked;
         tcpCheckbox.disabled = httpsCheckbox.checked || dotCheckbox.checked;
