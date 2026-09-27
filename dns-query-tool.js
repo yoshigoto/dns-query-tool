@@ -621,7 +621,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += `<li>プロトコル: <code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code> / 応答サイズ: <code>${bytesRead}</code>byte</li>`;
     html += `<li>クエリーID: <code>${queryId} (${response.id === queryId ? '一致' : '<span style="color: red;">不一致</span>'})</code></li>`;
     const opcodeStr = getOpcodeName(response);
-    html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: orange;">(QUERY 以外の Opcode です)</span>' : ''}</li>`;
+    html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: #E65C00;">(QUERY 以外の Opcode です)</span>' : ''}</li>`;
 
     // 応答コード (rcode) の取得。Extended RCODE は OPT の TTL 上位オクテットから合成する。
     const rcode = getResponseRcode(response);
@@ -663,7 +663,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += `<ul><li style="color: blue; margin: 0;">TCフラグが立っているので TCPでの再確認を推奨します。${displayData} をクリックしてみてください。</li></ul>`;
     }
     if (response.type === 'query') {
-        html += `<ul><li style="color: orange; margin: 0;">応答 (response) メッセージなのに QRフラグが立っていませんでした。</li></ul>`;
+        html += `<ul><li style="color: #E65C00; margin: 0;">応答 (response) メッセージなのに QRフラグが立っていませんでした。</li></ul>`;
     }
     html += '</ul>';
 
@@ -696,7 +696,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         if (recursionDesired && !checkingDisabled) {
             const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, true,
                 sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-            answerNoticeHtml += `<p style="color: orange; margin: 0;">※DNSSEC検証に失敗した可能性があります。${displayData} をクリックしてみてください。</p>`;
+            answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※DNSSEC検証に失敗した可能性があります。${displayData} をクリックしてみてください。</p>`;
         }
     } else if (rcode === 'REFUSED') {
         answerNoticeHtml += `<p style="color: red; margin: 0;">REFUSED: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> のポリシーによりクエリーが拒否されました。</p>`;
@@ -719,7 +719,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         }
                         const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
                             sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-                        answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてラベルを増やしてみてください。</p>`;
+                        answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてラベルを増やしてみてください。</p>`;
                     }
                 }
             }
@@ -741,7 +741,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         if (soaRr) {
                             const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
                                 sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-                            answerNoticeHtml += `<p style="color: orange; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてラベルを増やしてみてください。</p>`;
+                            answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてラベルを増やしてみてください。</p>`;
                         }
                     }
                 }
@@ -828,7 +828,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         });
         html += '</ul>';
     } else {
-        html += wrapSectionNoticeHtml('<p style="color: orange; margin: 0;">権威サーバーの情報は見つかりませんでした。</p>');
+        html += wrapSectionNoticeHtml('<p style="color: #E65C00; margin: 0;">権威サーバーの情報は見つかりませんでした。</p>');
     }
 
     // ADDITIONAL が返ってきた場合
@@ -969,7 +969,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                             mQTypeResponseInvalid = true;
                         }
                         if (mQType !== '' && !mQTypeResponseFound) {
-                            optError = '<p style="color: orange; margin: 0;">MQTYPE-Response がありません。サーバーが RFC 10029 に対応していない可能性があります。</p>';
+                            optError = '<p style="color: #E65C00; margin: 0;">MQTYPE-Response がありません。サーバーが RFC 10029 に対応していない可能性があります。</p>';
                         }
                         if (mQTypeResponseInvalid) {
                             optError = '<p style="color: red; margin: 0;">MQTYPE-Response が RFC 10029 の形式に適合していません。</p>';
@@ -1017,7 +1017,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += '</ul>';
         if (optPseudo.length > 0) {
             if (response.additionals.length === 1) {
-                html += wrapSectionNoticeHtml('<p style="color: orange; margin: 0;">追加の情報は見つかりませんでしたがオプション情報が見つかりました。</p>');
+                html += wrapSectionNoticeHtml('<p style="color: #E65C00; margin: 0;">追加の情報は見つかりませんでしたがオプション情報が見つかりました。</p>');
             }
             html += `<p><strong>OPT PSEUDOSECTION:</strong></p>`;
             html += `<ul>${optPseudo}</ul>`;
@@ -1026,7 +1026,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             }
         }
     } else {
-        html += wrapSectionNoticeHtml('<p style="color: orange; margin: 0;">追加の情報は見つかりませんでした。</p>');
+        html += wrapSectionNoticeHtml('<p style="color: #E65C00; margin: 0;">追加の情報は見つかりませんでした。</p>');
     }
 
     const warningHtml = getOptPseudoSectionStatusHtml(response, rawBuf);
