@@ -37,11 +37,11 @@
         <h2><a href="./">DNSクエリー送信ツール</a></h2>
         <section id="search-panel">
             <form id="search">
-                <div><label for="server" class="label-wide">クエリー先DNSサーバー:</label>
-                    <input type="text" class="input-wide" id="server" name="server" value="a.root-servers.net" placeholder="a.root-servers.net">
-                </div>
                 <div><label for="name" class="label-wide">対象ドメイン名 (name):</label>
                     <input type="text" class="input-wide" id="name" name="name" placeholder="example.com" autofocus required>
+                </div>
+                <div><label for="server" class="label-wide">クエリー先DNSサーバー:</label>
+                    <input type="text" class="input-wide" id="server" name="server" value="a.root-servers.net" placeholder="a.root-servers.net">
                 </div>
                 <div><label for="type" class="label-wide">クエリータイプ (type):</label>
                     <select id="type" name="type">
@@ -187,7 +187,7 @@
                 <div>
                     <label for="dot" class="label-wide">TLS送受信:</label>
                     <input type="checkbox" id="dot" name="dot" value="1">
-                    <label class="label-description" for="dot">(DoTで問い合わせたいときはチェック、ポート853)</label>
+                    <label class="label-description" for="dot">(DoTで問い合わせたいときはチェック - ポート853)</label>
                 </div>
                 <div class="option-group">
                     <div class="option-div">
