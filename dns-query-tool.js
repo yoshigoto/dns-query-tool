@@ -612,6 +612,28 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     let questionType = '';
     let questionClass = '';
     const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot);
+    const authorityNsRecords = (response.authorities || []).filter(record => record.type === 'NS');
+    const classifyNsRelationship = (zoneName, nameServerName) => {
+        const zone = normalizeDnsName(zoneName) || '.';
+        const nameServer = normalizeDnsName(nameServerName) || '.';
+        const labels = zone === '.' ? [] : zone.split('.');
+        const parentZone = labels.length > 1 ? labels.slice(1).join('.') : '.';
+        const isWithin = (name, ancestor) => ancestor === '.' || name === ancestor || name.endsWith(`.${ancestor}`);
+
+        if (isWithin(nameServer, zone)) return 'in-domain';
+        if (isWithin(nameServer, parentZone)) return 'sibling domain';
+        return 'unrelated';
+    };
+    const getAdditionalRelationship = (record) => {
+        const matchingNameServer = authorityNsRecords.find(authority =>
+            normalizeDnsName(authority.data) === normalizeDnsName(record.name));
+        const authority = matchingNameServer || authorityNsRecords
+            .slice()
+            .sort((left, right) => normalizeDnsName(right.name).split('.').length - normalizeDnsName(left.name).split('.').length)[0];
+        if (!authority) return '';
+        const nameServerName = matchingNameServer ? matchingNameServer.data : record.name;
+        return classifyNsRelationship(authority.name, nameServerName);
+    };
 
     html += '<div class="result"><h3>--- DNSレスポンス解析結果 ---</h3>';
     html += '<p><strong>基本情報:</strong></p>';
@@ -824,7 +846,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             }
             const authoritiesType = replaceUnknownRrTypeToKnown(escapeHtml(authorities.type));
             const authoritiesClass = authorities.class || 'IN';
-            html += `<li><strong>[${authoritiesType}]</strong> ${escapeHtml(authorities.name)} <code>${escapeHtml(authoritiesClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(authorities.ttl, 10)}秒)</li>`;
+            const relationship = authorities.type === 'NS'
+                ? ` (RFC 9499: ${classifyNsRelationship(authorities.name, authorities.data)})`
+                : '';
+            html += `<li><strong>[${authoritiesType}]</strong> ${escapeHtml(authorities.name)} <code>${escapeHtml(authoritiesClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(authorities.ttl, 10)}秒)${relationship}</li>`;
         });
         html += '</ul>';
     } else {
@@ -1011,7 +1036,11 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                 // EDNS0 は下で表示する
                 const additionalsType = replaceUnknownRrTypeToKnown(escapeHtml(additionals.type));
                 const additionalsClass = additionals.class || 'IN';
-                html += `<li><strong>[${additionalsType}]</strong> ${escapeHtml(additionals.name)} <code>${escapeHtml(additionalsClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(additionals.ttl, 10)}秒)</li>`;
+                const additionalRelationship = ['A', 'AAAA'].includes(additionals.type)
+                    ? getAdditionalRelationship(additionals)
+                    : '';
+                const relationship = additionalRelationship ? ` (RFC 9499: ${additionalRelationship})` : '';
+                html += `<li><strong>[${additionalsType}]</strong> ${escapeHtml(additionals.name)} <code>${escapeHtml(additionalsClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(additionals.ttl, 10)}秒)${relationship}</li>`;
             }
         });
         html += '</ul>';

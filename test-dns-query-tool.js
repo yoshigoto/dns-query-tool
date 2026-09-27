@@ -183,6 +183,34 @@ test('QNAME minimisationのNS名比較は末尾ピリオドを無視する', () 
     assert.match(html, /server=a\.root-servers\.net&amp;name=ns1\.example\.com&amp;type=A/);
 });
 
+test('Authority NS と Additional A/AAAA の RFC 9499 関係を TTL の後に表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'www.child.example.com', type: 'A' }],
+        answers: [],
+        authorities: [
+            { name: 'child.example.com', type: 'NS', data: 'ns1.child.example.com', ttl: 300 },
+            { name: 'child.example.com', type: 'NS', data: 'ns1.sibling.example.com', ttl: 300 },
+            { name: 'child.example.com', type: 'NS', data: 'ns1.example.net', ttl: 300 }
+        ],
+        additionals: [
+            { name: 'ns1.child.example.com', type: 'A', data: '192.0.2.1', ttl: 300 },
+            { name: 'ns1.sibling.example.com', type: 'AAAA', data: '2001:db8::1', ttl: 300 },
+            { name: 'ns1.example.net', type: 'A', data: '192.0.2.2', ttl: 300 },
+            { name: 'ns2.sibling.example.com', type: 'A', data: '192.0.2.4', ttl: 300 },
+            { name: 'other.example.net', type: 'A', data: '192.0.2.3', ttl: 300 }
+        ]
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'www.child.example.com', 'A', 100,
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /TTL: 300秒\) \(RFC 9499: in-domain\)/);
+    assert.match(html, /TTL: 300秒\) \(RFC 9499: sibling domain\)/);
+    assert.match(html, /TTL: 300秒\) \(RFC 9499: unrelated\)/);
+    assert.equal((html.match(/\(RFC 9499: unrelated\)/g) || []).length, 3);
+});
+
 test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
     const html = makeHtmlFromDns({
         id: 100,
