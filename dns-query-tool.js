@@ -618,7 +618,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += '<ul>';
     html += `<li>対象ドメイン名: <code>${escapeHtml(domainName)}</code></li>`;
     html += `<li>応答したサーバー: <code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></li>`;
-    html += `<li>プロトコル: <code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code> / 応答サイズ: <code>${bytesRead}</code>byte</li>`;
+    html += `<li>応答サイズ: <code>${bytesRead}</code>byte / プロトコル: <code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code></li>`;
     html += `<li>クエリーID: <code>${queryId} (${response.id === queryId ? '一致' : '<span style="color: red;">不一致</span>'})</code></li>`;
     const opcodeStr = getOpcodeName(response);
     html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: #E65C00;">(QUERY 以外の Opcode です)</span>' : ''}</li>`;
