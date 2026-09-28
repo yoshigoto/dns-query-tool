@@ -785,7 +785,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                     displayData = addQueryLinkToDisplayData(origin, pathname, 'a.root-servers.net', answer.data, queryType, false, checkingDisabled,
                         sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, 255, qnameType, answer.data);
                     if (rcode === 'NXDOMAIN') {
-                        answerNoticeHtml += `<p style="color: red; margin: 0;">※<b>CNAME</b> を辿った最終的な情報を、応答したサーバー <code>${escapeHtml(dnsServer)}</code> は保持していませんでした。</p>`;
+                        answerNoticeHtml += `<p style="color: red; margin: 0;">※<b>CNAME</b> を辿った最終的な情報を、応答したサーバー <code>${escapeHtml(dnsServer)}</code> は保持していませんでした。 (RFC 8020)</p>`;
                     }
                 } else if (answer.type === 'NS') {
                     if (qnameMinimisation) {
