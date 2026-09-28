@@ -2419,10 +2419,11 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
+const HOST = '127.0.0.1';
 const PORT = 3000;
 if (require.main === module) {
-    server.listen(PORT, () => {
-        console.log(`Webサーバーが起動しました: http://localhost:${PORT}`);
+    server.listen(PORT, HOST, () => {
+        console.log(`Webサーバーが起動しました: http://${HOST}:${PORT}`);
     });
 
     server.on('error', (err) => {
