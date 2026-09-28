@@ -772,9 +772,6 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     } else {
         answerNoticeHtml += `<p style="color: gray; margin: 0;">その他の応答コード: ${escapeHtml(rcode)}</p>`;
     }
-    if (answerNoticeHtml) {
-        html += wrapSectionNoticeHtml(answerNoticeHtml);
-    }
     if (response.answers && response.answers.length > 0) {
         html += '<ul>';
         if (qnameMinimisation && qnamePosition > 0) {
@@ -787,6 +784,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                     // CNAMEレコードはデータを検索対象ドメイン名として扱い、後続の検索ができるようにする
                     displayData = addQueryLinkToDisplayData(origin, pathname, 'a.root-servers.net', answer.data, queryType, false, checkingDisabled,
                         sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, 255, qnameType, answer.data);
+                    if (rcode === 'NXDOMAIN') {
+                        answerNoticeHtml += `<p style="color: red; margin: 0;">※<b>CNAME</b> を辿った最終的な情報を、応答したサーバー <code>${escapeHtml(dnsServer)}</code> は保持していませんでした。</p>`;
+                    }
                 } else if (answer.type === 'NS') {
                     if (qnameMinimisation) {
                         if (normalizeDnsName(answer.name) === normalizeDnsName(domainName)) {
@@ -824,6 +824,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             html += `<li><span style="color: #dd0000;"><strong>[${answerType}]</strong> ${escapeHtml(answer.name)} <code>${escapeHtml(answerClass)}</code></span> &rarr; <code>${displayData}</code> (TTL: ${parseInt(answer.ttl, 10)}秒)</li>`;
         });
         html += '</ul>';
+    }
+    if (answerNoticeHtml) {
+        html += wrapSectionNoticeHtml(answerNoticeHtml);
     }
 
     // AUTHORITY が返ってきた場合
