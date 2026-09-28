@@ -690,20 +690,21 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += '</ul>';
 
     // QUESTION SECTION
-    html += `<p><strong>QUESTION SECTION (${response.questions?.length || 0} 個) :</strong></p>`;
+    html += `<p><strong style="color: purple;">QUESTION SECTION (${response.questions?.length || 0} 個) :</strong></p>`;
     if (response.questions && response.questions.length > 0) {
         html += '<ul>';
         response.questions.forEach((question) => {
             questionName = question.name;
             questionType = replaceUnknownRrTypeToKnown(question.type);
             questionClass = question.class || 'IN';
-            html += `<li><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code>${qnameMinimisation ? `<span style="font-size: 90%;"> (QNAME minimisation - 先頭からのラベル削除数: <code>${escapeHtml(qnamePosition)}</code>個)</span>` : ''}</li>`;
+            let questionHtml = `<li><span style="color: purple;"><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code></span>${qnameMinimisation ? `<span style="font-size: 90%;"> &larr; 先頭からのラベル削除数: <code>${escapeHtml(qnamePosition)}</code>個 (QNAME minimisation)</span>` : ''}`;
             if (normalizeDnsName(questionName) !== normalizeDnsName(domainName) && !qnameMinimisation) {
-                html += `<ul><li style="color: red; margin: 0;">QUESTION SECTION のドメイン名が「対象ドメイン名」<code>${escapeHtml(domainName)}</code> と一致しませんでした。</li></ul>`;
+                questionHtml += `<ul><li style="color: red; margin: 0;">QUESTION SECTION のドメイン名が「対象ドメイン名」<code>${escapeHtml(domainName)}</code> と一致しませんでした。</li></ul>`;
             }
+            html += `${questionHtml}</li>`;
         });
         if (response.questions.length > 1) {
-            html += `<ul><li style="color: red; margin: 0;">QUESTION SECTION に複数の質問が含まれています。</li></ul>`;
+            html += `<li style="color: red; margin: 0;">QUESTION SECTION に複数の質問が含まれています。</li>`;
         }
         html += '</ul>';
     } else {
