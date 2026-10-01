@@ -232,6 +232,7 @@ test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
+    assert.match(html, /OPT PSEUDOSECTION <span class="section-count">1 項目<\/span>/);
     assert.match(html, /<dt>応答ステータス \(rcode\)<\/dt><dd><code>BADVERS<\/code><\/dd>/);
     assert.match(html, /Extended RCODE: 1 \(BADVERS \/ BADSIG\)/);
 });
@@ -306,7 +307,8 @@ test('EDNS optionをraw表示し、NSIDをhexと文字列で表示する', () =>
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /\[NSID\]<\/strong> <code>hex: 6e7369642d3031, text: nsid-01<\/code>/);
+    assert.match(html, /OPT PSEUDOSECTION <span class="section-count">4 項目<\/span>/);
+    assert.match(html, /<strong>NSID<\/strong><code>hex: 6e7369642d3031, text: nsid-01<\/code>/);
     assert.match(html, /OPTION_10 \(10\): 0102/);
     assert.match(html, /OPTION_65001 \(65001\): \(empty\)/);
 });
@@ -952,9 +954,9 @@ test('EDNS Option の ECS, Cookie, Padding をデコード表示する', () => {
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /\[ECS\]<\/strong> <code>family: 1 \(IPv4\), sourcePrefix: 24, scopePrefix: 0, address: 192\.0\.2\.0<\/code>/);
-    assert.match(html, /\[Cookie\]<\/strong> <code>Client Cookie: 1234567887654321, Server Cookie: 00000000<\/code>/);
-    assert.match(html, /\[Padding\]<\/strong> <code>length: 10 bytes<\/code>/);
+    assert.match(html, /<strong>ECS<\/strong><code>family: 1 \(IPv4\), sourcePrefix: 24, scopePrefix: 0, address: 192\.0\.2\.0<\/code>/);
+    assert.match(html, /<strong>Cookie<\/strong><code>Client Cookie: 1234567887654321, Server Cookie: 00000000<\/code>/);
+    assert.match(html, /<strong>Padding<\/strong><code>length: 10 bytes<\/code>/);
 });
 
 test('RFC 2308 ネガティブキャッシュ (Negative Caching) の TTL 算出と表示を検証する', () => {

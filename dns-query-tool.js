@@ -873,7 +873,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     const additionalRecordCount = response.additionals.filter((record) => record.type !== 'OPT').length;
     html += `<h4 class="dns-section-title dns-section-additional">ADDITIONAL SECTION <span class="section-count">${additionalRecordCount} 件</span></h4>`;
     if (response.additionals && response.additionals.length > 0) {
-        let optPseudo = '';
+        let optPseudoItems = [];
         let optError = '';
         if (additionalRecordCount > 0) {
             html += '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th scope="col">TYPE</th><th scope="col">NAME</th><th scope="col">CLASS</th><th scope="col">DATA</th><th scope="col">TTL</th></tr></thead><tbody>';
@@ -891,8 +891,8 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         let flagString = '';
                         let nsidString = '';
                         let nsidFound = false;
-                        let edeString = '';
-                        let optionString = '';
+                        const edeItems = [];
+                        const optionItems = [];
                         let mQTypeString = '';
                         let mQTypeResponseFound = false;
                         let mQTypeResponseInvalid = false;
@@ -940,31 +940,31 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                                         addrStr = addrBytes.toString('hex');
                                     }
                                     const familyStr = family === 1 ? '1 (IPv4)' : family === 2 ? '2 (IPv6)' : `${family}`;
-                                    optionString += `<li><strong>[ECS]</strong> <code>family: ${familyStr}, sourcePrefix: ${sourcePrefix}, scopePrefix: ${scopePrefix}, address: ${escapeHtml(addrStr)}</code></li>`;
+                                    optionItems.push(`<li><strong>ECS</strong><code>family: ${familyStr}, sourcePrefix: ${sourcePrefix}, scopePrefix: ${scopePrefix}, address: ${escapeHtml(addrStr)}</code></li>`);
                                 } else {
-                                    optionString += `<li><strong>[EDNS Option]</strong> <code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`;
+                                    optionItems.push(`<li><strong>EDNS Option</strong><code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`);
                                 }
                             } else if (option.code === 10 && Buffer.isBuffer(option.data)) {
                                 const buffer = option.data;
                                 if (buffer.length >= 8) {
                                     const clientCookie = buffer.subarray(0, 8).toString('hex');
                                     const serverCookie = buffer.length > 8 ? buffer.subarray(8).toString('hex') : '(none)';
-                                    optionString += `<li><strong>[Cookie]</strong> <code>Client Cookie: ${clientCookie}, Server Cookie: ${serverCookie}</code></li>`;
+                                    optionItems.push(`<li><strong>Cookie</strong><code>Client Cookie: ${clientCookie}, Server Cookie: ${serverCookie}</code></li>`);
                                 } else {
-                                    optionString += `<li><strong>[EDNS Option]</strong> <code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`;
+                                    optionItems.push(`<li><strong>EDNS Option</strong><code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`);
                                 }
                             } else if (option.code === 12 && Buffer.isBuffer(option.data)) {
-                                optionString += `<li><strong>[Padding]</strong> <code>length: ${option.data.length} bytes</code></li>`;
+                                optionItems.push(`<li><strong>Padding</strong><code>length: ${option.data.length} bytes</code></li>`);
                             } else if (option.code === 15 && Buffer.isBuffer(option.data)) {
                                 const buffer = option.data;
                                 if (buffer.length < 2) {
-                                    optionString += `<li><strong>[${optionName}]</strong> <code>code: ${escapeHtml(option.code)}, data: ${optionHex}</code></li>`;
+                                    optionItems.push(`<li><strong>${optionName}</strong><code>code: ${escapeHtml(option.code)}, data: ${optionHex}</code></li>`);
                                     continue;
                                 }
                             } else if (option.code === 20) {
                                 mQTypeQueryFound = true;
                             } else if (option.code !== 21) {
-                                optionString += `<li><strong>[EDNS Option]</strong> <code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`;
+                                optionItems.push(`<li><strong>EDNS Option</strong><code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`);
                             }
                             if (option.code === 15 && Buffer.isBuffer(option.data)) {
                                 const buffer = option.data;
@@ -979,7 +979,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                                     const extraText = buffer.toString('utf8', 2);
                                     edeTemp += `: (${escapeHtml(extraText)})`;
                                 }
-                                edeString += `<li><strong>[EDE]</strong> <code>${edeTemp}</code></li>`;
+                                edeItems.push(`<li><strong>EDE</strong><code>${edeTemp}</code></li>`);
                             }
                             if (option.code === 21 && Buffer.isBuffer(option.data)) {
                                 mQTypeResponseFound = true;
@@ -1024,18 +1024,13 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         const extendedRcodeDisplay = extendedRcodeName
                             ? `${extendedRcode} (${extendedRcodeName})`
                             : `${extendedRcode}`;
-                        optPseudo = `<li><strong>[EDNS]</strong> <code>Extended RCODE: ${extendedRcodeDisplay}, Version: ${optRecord.version || 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`;
+                        optPseudoItems = [`<li><strong>EDNS</strong><code>Extended RCODE: ${extendedRcodeDisplay}, Version: ${optRecord.version || 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`];
                         if (nsidFound) {
-                            optPseudo += `<li><strong>[NSID]</strong> <code>${nsidString || '(empty)'}</code></li>`;
+                            optPseudoItems.push(`<li><strong>NSID</strong><code>${nsidString || '(empty)'}</code></li>`);
                         }
-                        if (optionString !== '') {
-                            optPseudo += optionString;
-                        }
-                        if (edeString !== '') {
-                            optPseudo += `${edeString}`;
-                        }
+                        optPseudoItems.push(...optionItems, ...edeItems);
                         if (mQTypeResponseFound) {
-                            optPseudo += `<li><strong>[MQTYPE-Response]</strong> <code>${mQTypeString || '(empty)'}</code></li>`;
+                            optPseudoItems.push(`<li><strong>MQTYPE-Response</strong><code>${mQTypeString || '(empty)'}</code></li>`);
                         }
                     } else {
                         optError = `<p style="color: red; margin: 0;">不明なオプション情報です。(name: ${escapeHtml(additionals.name)})</p>`;
@@ -1062,12 +1057,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         if (additionalRecordCount > 0) {
             html += '</tbody></table></div>';
         }
-        if (optPseudo.length > 0) {
+        if (optPseudoItems.length > 0) {
             if (response.additionals.length === 1) {
                 html += wrapSectionNoticeHtml('<p style="color: #E65C00; margin: 0;">追加の情報は見つかりませんでしたがオプション情報が見つかりました。</p>');
             }
-            html += `<p><strong>OPT PSEUDOSECTION:</strong></p>`;
-            html += `<ul>${optPseudo}</ul>`;
+            html += `<h4 class="dns-section-title dns-section-opt">OPT PSEUDOSECTION <span class="section-count">${optPseudoItems.length} 項目</span></h4>`;
+            html += `<ul class="opt-pseudo-list">${optPseudoItems.join('')}</ul>`;
             if (optError.length > 0) {
                 html += wrapSectionNoticeHtml(optError);
             }
