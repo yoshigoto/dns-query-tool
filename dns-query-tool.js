@@ -636,58 +636,61 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     };
 
     html += '<div class="result dns-response"><h3>--- DNSレスポンス解析結果 ---</h3>';
-    html += '<p><strong>基本情報:</strong></p>';
-    html += '<ul>';
-    html += `<li>対象ドメイン名: <code>${escapeHtml(domainName)}</code></li>`;
-    html += `<li>応答したサーバー: <code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></li>`;
-    html += `<li>応答サイズ: <code>${bytesRead}</code>byte / プロトコル: <code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code></li>`;
-    html += `<li>クエリーID: <code>${queryId} (${response.id === queryId ? '一致' : '<span style="color: red;">不一致</span>'})</code></li>`;
+    html += '<h4 class="dns-section-title basic-info-title">基本情報</h4>';
+    html += '<dl class="basic-info">';
+    html += `<dt>対象ドメイン名</dt><dd><code>${escapeHtml(domainName)}</code></dd>`;
+    html += `<dt>応答したサーバー</dt><dd><code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></dd>`;
+    html += `<dt>応答サイズ</dt><dd><code>${bytesRead}</code> byte</dd>`;
+    html += `<dt>プロトコル</dt><dd><code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code></dd>`;
+    html += `<dt>クエリーID</dt><dd><code>${queryId}</code> <span class="basic-info-status ${response.id === queryId ? 'status-ok' : 'status-warning'}">${response.id === queryId ? '一致' : '不一致'}</span></dd>`;
     const opcodeStr = getOpcodeName(response);
-    html += `<li>Opcode: <code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span style="color: #E65C00;">(QUERY 以外の Opcode です)</span>' : ''}</li>`;
+    html += `<dt>Opcode</dt><dd><code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span class="basic-info-inline-warning">QUERY 以外の Opcode です</span>' : ''}</dd>`;
 
     // 応答コード (rcode) の取得。Extended RCODE は OPT の TTL 上位オクテットから合成する。
     const rcode = getResponseRcode(response);
-    html += `<li>応答ステータス (rcode): <code>${escapeHtml(rcode)}</code></li>`;
+    html += `<dt>応答ステータス (rcode)</dt><dd><code>${escapeHtml(rcode)}</code></dd>`;
 
     // フラグの取得
     let flagString = '';
     if (response.type === 'response') {
-        flagString += '<span title="Query / Response">QR</span> ';
+        flagString += '<span class="dns-flag" title="Query / Response">QR</span> ';
     }
     if (response.flags & dnsPacket.RECURSION_DESIRED) {
-        flagString += '<span title="Recursion Desired">RD</span> ';
+        flagString += '<span class="dns-flag" title="Recursion Desired">RD</span> ';
     }
     if (response.flags & dnsPacket.RECURSION_AVAILABLE) {
-        flagString += '<span title="Recursion Available">RA</span> ';
+        flagString += '<span class="dns-flag" title="Recursion Available">RA</span> ';
     }
     if (response.flags & dnsPacket.TRUNCATED_RESPONSE) {
-        flagString += '<span title="Truncated Response">TC</span> ';
+        flagString += '<span class="dns-flag dns-flag-warning" title="Truncated Response">TC</span> ';
     }
     if (response.flags & dnsPacket.AUTHORITATIVE_ANSWER) {
-        flagString += '<span title="Authoritative Answer">AA</span> ';
+        flagString += '<span class="dns-flag" title="Authoritative Answer">AA</span> ';
     }
     if (response.flags & dnsPacket.AUTHENTIC_DATA) {
-        flagString += '<span title="Authentic Data">AD</span> ';
+        flagString += '<span class="dns-flag" title="Authentic Data">AD</span> ';
     }
     if (response.flags & dnsPacket.CHECKING_DISABLED) {
-        flagString += '<span title="Checking Disabled">CD</span> ';
+        flagString += '<span class="dns-flag" title="Checking Disabled">CD</span> ';
     }
     if (response.flags & 0x0040) {
-        flagString += '<span title="Reserved">Z</span> ';
+        flagString += '<span class="dns-flag dns-flag-warning" title="Reserved">Z</span> ';
     }
     if (flagString !== '') {
         flagString = flagString.slice(0, -1);
     }
-    html += `<li>フラグ (flags): <code>${flagString}</code></li>`;
+    html += `<dt>フラグ (flags)</dt><dd class="basic-info-flags">${flagString || '<span class="basic-info-empty">なし</span>'}</dd>`;
+    html += '</dl>';
+    let basicInfoNoticeHtml = '';
     if (!sendTcp && !sendHttps && !sendDot && (response.flags & dnsPacket.TRUNCATED_RESPONSE)) {
         const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-            true, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-        html += `<ul><li style="color: blue; margin: 0;">TCフラグが立っているので TCPでの再確認を推奨します。${displayData} をクリックしてみてください。</li></ul>`;
+            true, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'TCPで再確認');
+        basicInfoNoticeHtml += `<aside class="basic-info-notice notice-info" role="note">TCフラグが立っているので TCPでの再確認を推奨します。${displayData}</aside>`;
     }
     if (response.type === 'query') {
-        html += `<ul><li style="color: #E65C00; margin: 0;">応答 (response) メッセージなのに QRフラグが立っていませんでした。</li></ul>`;
+        basicInfoNoticeHtml += '<aside class="basic-info-notice notice-warning" role="note">応答 (response) メッセージなのに QRフラグが立っていませんでした。</aside>';
     }
-    html += '</ul>';
+    html += basicInfoNoticeHtml;
 
     // QUESTION SECTION
     html += `<h4 class="dns-section-title dns-section-question">QUESTION SECTION <span class="section-count">${response.questions?.length || 0} 件</span></h4>`;

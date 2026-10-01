@@ -36,6 +36,25 @@
         .dns-section-additional { color: #315f91; }
         .section-count { color: #657080; font-size: 0.8rem; font-weight: 400; }
         .dns-response { white-space: normal; }
+        .dns-response code { color: #172b4d; background: transparent; padding: 0; border-radius: 0; font-family: monospace; }
+        .basic-info-title { margin-top: 8px; }
+        .basic-info { display: grid; grid-template-columns: minmax(10rem, 220px) minmax(0, 1fr); margin: 0 0 12px; }
+        .basic-info dt, .basic-info dd { min-width: 0; margin: 0; padding: 8px 10px; border-bottom: 1px solid #e5e9ef; }
+        .basic-info dt { color: #5b6674; font-weight: 700; }
+        .basic-info dd { overflow-wrap: anywhere; }
+        .basic-info code { overflow-wrap: anywhere; }
+        .basic-info-status { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 3px; font-size: 0.78rem; }
+        .status-ok { color: #246447; background: #e9f4ed; }
+        .status-warning, .basic-info-inline-warning { color: #9a5012; background: #fff2dc; }
+        .basic-info-inline-warning { display: inline-block; margin: 2px 0 2px 6px; padding: 2px 6px; border-radius: 3px; font-size: 0.82rem; }
+        .basic-info-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+        .dns-flag { display: inline-block; padding: 2px 6px; border: 1px solid #d2dae3; border-radius: 3px; color: #34465a; background: #f3f6f8; font-family: monospace; font-size: 0.78rem; }
+        .dns-flag-warning { border-color: #e5c58f; color: #87500c; background: #fff4df; }
+        .basic-info-empty { color: #657080; }
+        .basic-info-notice { margin: 10px 0; padding: 10px 12px; border-left: 4px solid; }
+        .notice-info { border-color: #2872a8; color: #285477; background: #eef6fb; }
+        .notice-warning { border-color: #d18a26; color: #83500f; background: #fff6e7; }
+        .basic-info-notice a { display: inline-block; margin-left: 8px; padding: 4px 8px; border: 1px solid currentColor; border-radius: 4px; font-weight: 700; text-decoration: none; }
         .rr-table-wrap { overflow-x: auto; }
         .rr-table { width: 100%; border-collapse: collapse; table-layout: fixed; white-space: normal; }
         .rr-table th, .rr-table td { padding: 9px 10px; border-bottom: 1px solid #e5e9ef; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
@@ -58,6 +77,8 @@
         @media (max-width: 640px) {
             body { padding: 10px; }
             .container { padding: 16px; }
+            .basic-info { grid-template-columns: minmax(104px, 31%) minmax(0, 1fr); }
+            .basic-info dt, .basic-info dd { padding: 7px 6px; }
             .rr-table thead { display: none; }
             .rr-table, .rr-table tbody, .rr-table tr { display: block; width: 100%; }
             .rr-table tr { padding: 8px 0; border-bottom: 1px solid #d9e0e8; }
