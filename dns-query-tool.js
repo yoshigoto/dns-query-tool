@@ -635,7 +635,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         return classifyNsRelationship(authority.name, nameServerName);
     };
 
-    html += '<div class="result"><h3>--- DNSレスポンス解析結果 ---</h3>';
+    html += '<div class="result dns-response"><h3>--- DNSレスポンス解析結果 ---</h3>';
     html += '<p><strong>基本情報:</strong></p>';
     html += '<ul>';
     html += `<li>対象ドメイン名: <code>${escapeHtml(domainName)}</code></li>`;
@@ -690,29 +690,35 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += '</ul>';
 
     // QUESTION SECTION
-    html += `<p><strong style="color: purple;">QUESTION SECTION (${response.questions?.length || 0} 個) :</strong></p>`;
+    html += `<h4 class="dns-section-title dns-section-question">QUESTION SECTION <span class="section-count">${response.questions?.length || 0} 件</span></h4>`;
     if (response.questions && response.questions.length > 0) {
-        html += '<ul>';
+        html += '<div class="rr-table-wrap"><table class="rr-table rr-table-question"><thead><tr><th scope="col">TYPE</th><th scope="col">NAME</th><th scope="col">CLASS</th></tr></thead><tbody>';
+        let questionNoticeHtml = '';
         response.questions.forEach((question) => {
             questionName = question.name;
             questionType = replaceUnknownRrTypeToKnown(question.type);
             questionClass = question.class || 'IN';
-            let questionHtml = `<li><span style="color: purple;"><strong>[${escapeHtml(questionType)}]</strong> ${escapeHtml(questionName)} <code>${escapeHtml(questionClass)}</code></span>${qnameMinimisation ? `<span style="font-size: 90%;"> &larr; 先頭からのラベル削除数: <code>${escapeHtml(qnamePosition)}</code>個 (QNAME minimisation)</span>` : ''}`;
+            const qnameAnnotation = qnameMinimisation
+                ? `<span class="rr-annotation">先頭からのラベル削除数: <code>${escapeHtml(qnamePosition)}</code>個 (QNAME minimisation)</span>`
+                : '';
+            html += `<tr><th scope="row" data-label="TYPE"><span class="rr-type rr-type-question">${escapeHtml(questionType)}</span></th><td data-label="NAME"><code class="rr-value">${escapeHtml(questionName)}</code>${qnameAnnotation}</td><td data-label="CLASS"><code class="rr-value">${escapeHtml(questionClass)}</code></td></tr>`;
             if (normalizeDnsName(questionName) !== normalizeDnsName(domainName) && !qnameMinimisation) {
-                questionHtml += `<ul><li style="color: red; margin: 0;">QUESTION SECTION のドメイン名が「対象ドメイン名」<code>${escapeHtml(domainName)}</code> と一致しませんでした。</li></ul>`;
+                questionNoticeHtml += `<p style="color: red; margin: 0;">QUESTION SECTION のドメイン名が「対象ドメイン名」<code>${escapeHtml(domainName)}</code> と一致しませんでした。</p>`;
             }
-            html += `${questionHtml}</li>`;
         });
-        if (response.questions.length > 1) {
-            html += `<li style="color: red; margin: 0;">QUESTION SECTION に複数の質問が含まれています。</li>`;
+        html += '</tbody></table></div>';
+        if (questionNoticeHtml) {
+            html += wrapSectionNoticeHtml(questionNoticeHtml);
         }
-        html += '</ul>';
+        if (response.questions.length > 1) {
+            html += wrapSectionNoticeHtml('<p style="color: red; margin: 0;">QUESTION SECTION に複数の質問が含まれています。</p>');
+        }
     } else {
         html += wrapSectionNoticeHtml(`<p style="color: red; margin: 0;">応答に QUESTION SECTION が存在しませんでした。</p>`);
     }
 
     // ANSWER SECTION について応答コードに応じた条件分岐
-    html += `<p><strong style="color: ${response.answers.length > 0 ? '#dd0000' : '#0000dd'};">ANSWER SECTION (${response.answers.length} 個) :</strong></p>`;
+    html += `<h4 class="dns-section-title dns-section-answer">ANSWER SECTION <span class="section-count">${response.answers.length} 件</span></h4>`;
     let answerNoticeHtml = '';
     if (rcode === 'SERVFAIL') {
         answerNoticeHtml += `<p style="color: red; margin: 0;">SERVFAIL: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> で一時的なエラーが発生したか、設定に問題があります。</p>`;
@@ -774,7 +780,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         answerNoticeHtml += `<p style="color: gray; margin: 0;">その他の応答コード: ${escapeHtml(rcode)}</p>`;
     }
     if (response.answers && response.answers.length > 0) {
-        html += '<ul>';
+        html += '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th scope="col">TYPE</th><th scope="col">NAME</th><th scope="col">CLASS</th><th scope="col">DATA</th><th scope="col">TTL</th></tr></thead><tbody>';
         if (qnameMinimisation && qnamePosition > 0) {
             qnamePosition--;
         }
@@ -822,18 +828,18 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             }
             const answerType = replaceUnknownRrTypeToKnown(escapeHtml(answer.type));
             const answerClass = answer.class || 'IN';
-            html += `<li><span style="color: #dd0000;"><strong>[${answerType}]</strong> ${escapeHtml(answer.name)} <code>${escapeHtml(answerClass)}</code></span> &rarr; <code>${displayData}</code> (TTL: ${parseInt(answer.ttl, 10)}秒)</li>`;
+            html += `<tr><th scope="row" data-label="TYPE"><span class="rr-type rr-type-answer">${answerType}</span></th><td data-label="NAME"><code class="rr-value">${escapeHtml(answer.name)}</code></td><td data-label="CLASS"><code class="rr-value">${escapeHtml(answerClass)}</code></td><td data-label="DATA"><code class="rr-value">${displayData}</code></td><td data-label="TTL"><span class="rr-ttl">${parseInt(answer.ttl, 10)}秒</span></td></tr>`;
         });
-        html += '</ul>';
+        html += '</tbody></table></div>';
     }
     if (answerNoticeHtml) {
         html += wrapSectionNoticeHtml(answerNoticeHtml);
     }
 
     // AUTHORITY が返ってきた場合
-    html += `<p><strong>AUTHORITY SECTION (${response.authorities.length} 個) :</strong></p>`;
+    html += `<h4 class="dns-section-title dns-section-authority">AUTHORITY SECTION <span class="section-count">${response.authorities.length} 件</span></h4>`;
     if (response.authorities && response.authorities.length > 0) {
-        html += '<ul>';
+        html += '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th scope="col">TYPE</th><th scope="col">NAME</th><th scope="col">CLASS</th><th scope="col">DATA</th><th scope="col">TTL</th></tr></thead><tbody>';
         response.authorities.forEach((authorities) => {
             let displayData = decodeResourceRecord(authorities.type, authorities.data);
             if (displayData.length === 0) {
@@ -851,21 +857,24 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             const authoritiesType = replaceUnknownRrTypeToKnown(escapeHtml(authorities.type));
             const authoritiesClass = authorities.class || 'IN';
             const relationship = authorities.type === 'NS'
-                ? ` (RFC 9499: ${classifyNsRelationship(authorities.name, authorities.data)})`
+                ? `<span class="rr-annotation">RFC 9499: ${classifyNsRelationship(authorities.name, authorities.data)}</span>`
                 : '';
-            html += `<li><strong>[${authoritiesType}]</strong> ${escapeHtml(authorities.name)} <code>${escapeHtml(authoritiesClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(authorities.ttl, 10)}秒)${relationship}</li>`;
+            html += `<tr><th scope="row" data-label="TYPE"><span class="rr-type">${authoritiesType}</span></th><td data-label="NAME"><code class="rr-value">${escapeHtml(authorities.name)}</code></td><td data-label="CLASS"><code class="rr-value">${escapeHtml(authoritiesClass)}</code></td><td data-label="DATA"><code class="rr-value">${displayData}</code>${relationship}</td><td data-label="TTL"><span class="rr-ttl">${parseInt(authorities.ttl, 10)}秒</span></td></tr>`;
         });
-        html += '</ul>';
+        html += '</tbody></table></div>';
     } else {
         html += wrapSectionNoticeHtml('<p style="color: #E65C00; margin: 0;">権威サーバーの情報は見つかりませんでした。</p>');
     }
 
     // ADDITIONAL が返ってきた場合
-    html += `<p><strong>ADDITIONAL SECTION (${response.additionals.length} 個) :</strong></p>`;
+    const additionalRecordCount = response.additionals.filter((record) => record.type !== 'OPT').length;
+    html += `<h4 class="dns-section-title dns-section-additional">ADDITIONAL SECTION <span class="section-count">${additionalRecordCount} 件</span></h4>`;
     if (response.additionals && response.additionals.length > 0) {
         let optPseudo = '';
         let optError = '';
-        html += '<ul>';
+        if (additionalRecordCount > 0) {
+            html += '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th scope="col">TYPE</th><th scope="col">NAME</th><th scope="col">CLASS</th><th scope="col">DATA</th><th scope="col">TTL</th></tr></thead><tbody>';
+        }
         response.additionals.forEach((additionals) => {
             let displayData = decodeResourceRecord(additionals.type, additionals.data);
             if (displayData.length === 0) {
@@ -1043,11 +1052,13 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                 const additionalRelationship = ['A', 'AAAA'].includes(additionals.type)
                     ? getAdditionalRelationship(additionals)
                     : '';
-                const relationship = additionalRelationship ? ` (RFC 9499: ${additionalRelationship})` : '';
-                html += `<li><strong>[${additionalsType}]</strong> ${escapeHtml(additionals.name)} <code>${escapeHtml(additionalsClass)}</code> &rarr; <code>${displayData}</code> (TTL: ${parseInt(additionals.ttl, 10)}秒)${relationship}</li>`;
+                const relationship = additionalRelationship ? `<span class="rr-annotation">RFC 9499: ${additionalRelationship}</span>` : '';
+                html += `<tr><th scope="row" data-label="TYPE"><span class="rr-type">${additionalsType}</span></th><td data-label="NAME"><code class="rr-value">${escapeHtml(additionals.name)}</code></td><td data-label="CLASS"><code class="rr-value">${escapeHtml(additionalsClass)}</code></td><td data-label="DATA"><code class="rr-value">${displayData}</code>${relationship}</td><td data-label="TTL"><span class="rr-ttl">${parseInt(additionals.ttl, 10)}秒</span></td></tr>`;
             }
         });
-        html += '</ul>';
+        if (additionalRecordCount > 0) {
+            html += '</tbody></table></div>';
+        }
         if (optPseudo.length > 0) {
             if (response.additionals.length === 1) {
                 html += wrapSectionNoticeHtml('<p style="color: #E65C00; margin: 0;">追加の情報は見つかりませんでしたがオプション情報が見つかりました。</p>');

@@ -29,7 +29,42 @@
         .explanation { font-size: 90%; }
         footer { max-width: 1200px; margin: 20px auto 0; padding: 0 25px; color: #666; font-size: 90%; text-align: center; }
         ul { padding-left: 20px; }
+        .dns-section-title { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 8px; padding-bottom: 7px; border-bottom: 1px solid #d9e0e8; font-size: 1rem; }
+        .dns-section-question { color: #7253a6; }
+        .dns-section-answer { color: #a8332a; }
+        .dns-section-authority { color: #28705b; }
+        .dns-section-additional { color: #315f91; }
+        .section-count { color: #657080; font-size: 0.8rem; font-weight: 400; }
+        .dns-response { white-space: normal; }
+        .rr-table-wrap { overflow-x: auto; }
+        .rr-table { width: 100%; border-collapse: collapse; table-layout: fixed; white-space: normal; }
+        .rr-table th, .rr-table td { padding: 9px 10px; border-bottom: 1px solid #e5e9ef; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+        .rr-table thead th { color: #5b6674; background: #f3f6f8; font-size: 0.76rem; font-weight: 700; }
+        .rr-table tbody tr:hover { background: #f8fafb; }
+        .rr-table th:nth-child(1) { width: 8%; }
+        .rr-table th:nth-child(2) { width: 25%; }
+        .rr-table th:nth-child(3) { width: 9%; }
+        .rr-table th:nth-child(5) { width: 10%; }
+        .rr-table-question th:nth-child(1) { width: 12%; }
+        .rr-table-question th:nth-child(2) { width: 72%; }
+        .rr-table-question th:nth-child(3) { width: 16%; }
+        .rr-table .rr-value { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+        .rr-type { color: #315f91; font-size: 0.85rem; }
+        .rr-type-answer { color: #a8332a; }
+        .rr-type-question { color: #7253a6; }
+        .rr-ttl { color: #4d5a68; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .rr-annotation { display: block; margin-top: 4px; color: #657080; font-size: 0.78rem; }
         code { background: #e0e0e0; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            .container { padding: 16px; }
+            .rr-table thead { display: none; }
+            .rr-table, .rr-table tbody, .rr-table tr { display: block; width: 100%; }
+            .rr-table tr { padding: 8px 0; border-bottom: 1px solid #d9e0e8; }
+            .rr-table th, .rr-table td { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; width: auto !important; padding: 4px 2px; border: 0; }
+            .rr-table [data-label]::before { content: attr(data-label); color: #657080; font-size: 0.74rem; font-weight: 700; }
+            .rr-table .rr-annotation { grid-column: 2; }
+        }
     </style>
 </head>
 <body>
