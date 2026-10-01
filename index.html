@@ -34,6 +34,7 @@
         .dns-section-answer { color: #a8332a; }
         .dns-section-authority { color: #28705b; }
         .dns-section-additional { color: #315f91; }
+        .dns-section-opt { color: #63707d; }
         .section-count { color: #657080; font-size: 0.8rem; font-weight: 400; }
         .dns-response { white-space: normal; }
         .dns-response code { color: #172b4d; background: transparent; padding: 0; border-radius: 0; font-family: monospace; }
@@ -70,6 +71,10 @@
         .rr-table .rr-value { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
         .dns-response .rr-value, .dns-response .rr-ttl, .dns-response .section-notice { font-size: 0.9rem; }
         .dns-response .section-notice code { font-size: inherit; }
+        .opt-pseudo-list { margin: 0; padding: 0; list-style: none; }
+        .opt-pseudo-list li { display: grid; grid-template-columns: minmax(130px, 18%) minmax(0, 1fr); gap: 10px; padding: 9px 10px; border-bottom: 1px solid #e5e9ef; overflow-wrap: anywhere; }
+        .opt-pseudo-list strong { color: #5b6674; }
+        .dns-response .opt-pseudo-list code { font-size: 0.9rem; }
         .rr-type { color: #315f91; font-size: 0.85rem; }
         .rr-type-answer { color: #a8332a; }
         .rr-type-question { color: #7253a6; }
@@ -87,6 +92,7 @@
             .rr-table th, .rr-table td { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; width: auto !important; padding: 4px 2px; border: 0; }
             .rr-table [data-label]::before { content: attr(data-label); color: #657080; font-size: 0.74rem; font-weight: 700; }
             .rr-table .rr-annotation { grid-column: 2; }
+            .opt-pseudo-list li { grid-template-columns: minmax(78px, 25%) minmax(0, 1fr); gap: 8px; padding: 7px 4px; }
         }
     </style>
 </head>
