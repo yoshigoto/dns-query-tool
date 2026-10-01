@@ -29,7 +29,63 @@
         .explanation { font-size: 90%; }
         footer { max-width: 1200px; margin: 20px auto 0; padding: 0 25px; color: #666; font-size: 90%; text-align: center; }
         ul { padding-left: 20px; }
+        .dns-section-title { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 8px; padding-bottom: 7px; border-bottom: 1px solid #d9e0e8; font-size: 1rem; }
+        .dns-section-question { color: #7253a6; }
+        .dns-section-answer { color: #a8332a; }
+        .dns-section-authority { color: #28705b; }
+        .dns-section-additional { color: #315f91; }
+        .section-count { color: #657080; font-size: 0.8rem; font-weight: 400; }
+        .dns-response { white-space: normal; }
+        .dns-response code { color: #172b4d; background: transparent; padding: 0; border-radius: 0; font-family: monospace; }
+        .basic-info-title { margin-top: 8px; }
+        .basic-info { display: grid; grid-template-columns: minmax(10rem, 220px) minmax(0, 1fr); margin: 0 0 12px; }
+        .basic-info dt, .basic-info dd { min-width: 0; margin: 0; padding: 8px 10px; border-bottom: 1px solid #e5e9ef; }
+        .basic-info dt { color: #5b6674; font-weight: 700; }
+        .basic-info dd { overflow-wrap: anywhere; }
+        .basic-info code { overflow-wrap: anywhere; }
+        .basic-info-status { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 3px; font-size: 0.78rem; }
+        .status-ok { color: #246447; background: #e9f4ed; }
+        .status-warning, .basic-info-inline-warning { color: #9a5012; background: #fff2dc; }
+        .basic-info-inline-warning { display: inline-block; margin: 2px 0 2px 6px; padding: 2px 6px; border-radius: 3px; font-size: 0.82rem; }
+        .basic-info-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+        .dns-flag { display: inline-block; padding: 2px 6px; border: 1px solid #d2dae3; border-radius: 3px; color: #34465a; background: #f3f6f8; font-family: monospace; font-size: 0.78rem; }
+        .dns-flag-warning { border-color: #e5c58f; color: #87500c; background: #fff4df; }
+        .basic-info-empty { color: #657080; }
+        .basic-info-notice { margin: 10px 0; padding: 10px 12px; border-left: 4px solid; }
+        .notice-info { border-color: #2872a8; color: #285477; background: #eef6fb; }
+        .notice-warning { border-color: #d18a26; color: #83500f; background: #fff6e7; }
+        .basic-info-notice a { display: inline-block; margin-left: 8px; padding: 4px 8px; border: 1px solid currentColor; border-radius: 4px; font-weight: 700; text-decoration: none; }
+        .rr-table-wrap { overflow-x: auto; }
+        .rr-table { width: 100%; border-collapse: collapse; table-layout: fixed; white-space: normal; }
+        .rr-table th, .rr-table td { padding: 9px 10px; border-bottom: 1px solid #e5e9ef; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+        .rr-table thead th { color: #5b6674; background: #f3f6f8; font-size: 0.76rem; font-weight: 700; }
+        .rr-table tbody tr:hover { background: #f8fafb; }
+        .rr-table th:nth-child(1) { width: 8%; }
+        .rr-table th:nth-child(2) { width: 25%; }
+        .rr-table th:nth-child(3) { width: 9%; }
+        .rr-table th:nth-child(5) { width: 10%; }
+        .rr-table-question th:nth-child(1) { width: 12%; }
+        .rr-table-question th:nth-child(2) { width: 72%; }
+        .rr-table-question th:nth-child(3) { width: 16%; }
+        .rr-table .rr-value { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+        .rr-type { color: #315f91; font-size: 0.85rem; }
+        .rr-type-answer { color: #a8332a; }
+        .rr-type-question { color: #7253a6; }
+        .rr-ttl { color: #4d5a68; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .rr-annotation { display: block; margin-top: 4px; color: #657080; font-size: 0.78rem; }
         code { background: #e0e0e0; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            .container { padding: 16px; }
+            .basic-info { grid-template-columns: minmax(104px, 31%) minmax(0, 1fr); }
+            .basic-info dt, .basic-info dd { padding: 7px 6px; }
+            .rr-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+            .rr-table, .rr-table tbody, .rr-table tr { display: block; width: 100%; }
+            .rr-table tr { padding: 8px 0; border-bottom: 1px solid #d9e0e8; }
+            .rr-table th, .rr-table td { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; width: auto !important; padding: 4px 2px; border: 0; }
+            .rr-table [data-label]::before { content: attr(data-label); color: #657080; font-size: 0.74rem; font-weight: 700; }
+            .rr-table .rr-annotation { grid-column: 2; }
+        }
     </style>
 </head>
 <body>
