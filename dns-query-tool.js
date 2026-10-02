@@ -927,7 +927,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                             const optionHex = escapeHtml(optionData.toString('hex'));
                             if (option.code === 3) {
                                 nsidFound = true;
-                                nsidString = `hex: ${optionData.toString('hex')}, text: ${escapeHtml(optionData.toString('utf8'))}`;
+                                nsidString = `text: ${escapeHtml(optionData.toString('utf8'))}, hex: ${optionData.toString('hex')}`;
                             } else if (option.code === 8 && Buffer.isBuffer(option.data)) {
                                 const buffer = option.data;
                                 if (buffer.length >= 4) {

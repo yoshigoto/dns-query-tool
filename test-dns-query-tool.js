@@ -308,7 +308,7 @@ test('EDNS optionをraw表示し、NSIDをhexと文字列で表示する', () =>
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /OPT PSEUDOSECTION <span class="section-count">4 項目<\/span>/);
-    assert.match(html, /<strong>NSID<\/strong><code>hex: 6e7369642d3031, text: nsid-01<\/code>/);
+    assert.match(html, /<strong>NSID<\/strong><code>text: nsid-01, hex: 6e7369642d3031<\/code>/);
     assert.match(html, /OPTION_10 \(10\): 0102/);
     assert.match(html, /OPTION_65001 \(65001\): \(empty\)/);
 });
