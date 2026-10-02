@@ -617,6 +617,20 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot);
     const addQueryActionLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot, 'notice-action');
     const authorityNsRecords = (response.authorities || []).filter(record => record.type === 'NS');
+    const nameServerAuthorities = new Map();
+    let fallbackAuthority = null;
+    let fallbackAuthorityLabelCount = -1;
+    for (const authority of authorityNsRecords) {
+        const normalizedNameServer = normalizeDnsName(authority.data);
+        if (!nameServerAuthorities.has(normalizedNameServer)) {
+            nameServerAuthorities.set(normalizedNameServer, authority);
+        }
+        const labelCount = normalizeDnsName(authority.name).split('.').length;
+        if (labelCount > fallbackAuthorityLabelCount) {
+            fallbackAuthority = authority;
+            fallbackAuthorityLabelCount = labelCount;
+        }
+    }
     const classifyNsRelationship = (zoneName, nameServerName) => {
         const zone = normalizeDnsName(zoneName) || '.';
         const nameServer = normalizeDnsName(nameServerName) || '.';
@@ -629,11 +643,8 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         return 'unrelated';
     };
     const getAdditionalRelationship = (record) => {
-        const matchingNameServer = authorityNsRecords.find(authority =>
-            normalizeDnsName(authority.data) === normalizeDnsName(record.name));
-        const authority = matchingNameServer || authorityNsRecords
-            .slice()
-            .sort((left, right) => normalizeDnsName(right.name).split('.').length - normalizeDnsName(left.name).split('.').length)[0];
+        const matchingNameServer = nameServerAuthorities.get(normalizeDnsName(record.name));
+        const authority = matchingNameServer || fallbackAuthority;
         if (!authority) return '';
         const nameServerName = matchingNameServer ? matchingNameServer.data : record.name;
         return classifyNsRelationship(authority.name, nameServerName);
@@ -996,13 +1007,13 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                                 const primaryTypeCode = response.questions && response.questions.length > 0
                                     ? getDnsTypeCode(response.questions[0].type)
                                     : -1;
-                                const responseTypes = [];
+                                const responseTypes = new Set();
                                 for (let offset = 0; offset < buffer.length; offset += 2) {
                                     const type = buffer.readUInt16BE(offset);
-                                    if (responseTypes.includes(type) || type === primaryTypeCode || type === 0 || (type >= 128 && type <= 255)) {
+                                    if (responseTypes.has(type) || type === primaryTypeCode || type === 0 || (type >= 128 && type <= 255)) {
                                         mQTypeResponseInvalid = true;
                                     }
-                                    responseTypes.push(type);
+                                    responseTypes.add(type);
                                     mQTypeString += `${dnsTypes.toString(type)},`;
                                 }
                                 if (mQTypeString !== '') {
