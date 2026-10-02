@@ -330,7 +330,7 @@ test('EDNS0 の DO フラグおよび CO フラグ (Compact Answers OK) を正�
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     true, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /flags: DO CO/);
+    assert.match(html, /flags: <span class="dns-flag" title="DNSSEC OK">DO<\/span> <span class="dns-flag" title="Compact Answers OK">CO<\/span>/);
 });
 test('OPT疑似セクションが一般的に破損している場合を表示する', () => {
     const html = makeHtmlFromDns({

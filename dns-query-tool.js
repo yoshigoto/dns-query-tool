@@ -904,10 +904,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         let mQTypeQueryFound = false;
                         const ednsFlags = [];
                         if (optRecord.flags & DNSSEC_OK) {
-                            ednsFlags.push('DO');
+                            ednsFlags.push('<span class="dns-flag" title="DNSSEC OK">DO</span>');
                         }
                         if (optRecord.flags & COMPACT_ANSWERS_OK) {
-                            ednsFlags.push('CO');
+                            ednsFlags.push('<span class="dns-flag" title="Compact Answers OK">CO</span>');
                         }
                         flagString = ednsFlags.join(' ');
                         for (const option of optRecord.options) {
