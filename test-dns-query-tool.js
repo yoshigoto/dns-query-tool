@@ -739,7 +739,40 @@ test('UDP応答のTCフラグはTCP再確認アクションを表示する', () 
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /class="basic-info-notice notice-info"[^>]*>TCフラグが立っているので TCPでの再確認を推奨します/);
-    assert.match(html, /<a data-dns-query-link href="[^"]*tcp=1[^"]*">TCPで再確認<\/a>/);
+    assert.match(html, /<a class="notice-action" data-dns-query-link href="[^"]*tcp=1[^"]*">TCPで再確認<\/a>/);
+});
+
+test('DNSSECとQNAME minimisationの案内リンクをアクションボタンで表示する', () => {
+    const dnssecHtml = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'SERVFAIL',
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+    true, false, false, false, false, '/dns-query', false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(dnssecHtml, /DNSSEC検証に失敗した可能性があります。<a class="notice-action" data-dns-query-link href="[^"]*cd=1[^"]*">CDフラグで再確認<\/a>/);
+
+    const qnameHtml = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NXDOMAIN',
+        questions: [{ name: 'www.example.com', type: 'A' }],
+        answers: [],
+        authorities: [{
+            name: 'example.com',
+            type: 'SOA',
+            ttl: 300,
+            data: { mname: 'ns.example.com', rname: 'hostmaster.example.com', serial: 1, refresh: 3600, retry: 600, expire: 86400, minimum: 300 }
+        }],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'www.example.com', 'A', 100,
+    true, false, false, false, false, '/dns-query', false, false, '1232', false, '', true, 1, 'A');
+
+    assert.match(qnameHtml, /QNAME minimisation が有効になっています。<a class="notice-action" data-dns-query-link href="[^"]*qposi=0[^"]*">ラベルを増やす<\/a>/);
 });
 
 test('DNSサーバー解決はIPv4失敗時にIPv6を試し、委任先を再帰解決する', async () => {

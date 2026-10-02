@@ -284,7 +284,7 @@ const escapeHtml = (str) => {
 };
 
 const addLinkToDisplayData = (origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, displayData, queryClass='IN', sendDot=false) => {
+    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, displayData, queryClass='IN', sendDot=false, linkClass='') => {
     const query = new URLSearchParams({
         server: dnsServer,
         name: domainName,
@@ -307,6 +307,9 @@ const addLinkToDisplayData = (origin, pathname, dnsServer, domainName, queryType
         qtype: qnameType
     });
     let html = '<a ';
+    if (linkClass) {
+        html = `<a class="${escapeHtml(linkClass)}" `;
+    }
     html += `data-dns-query-link href="${escapeHtml(`.${pathname}?${query.toString()}`)}">${escapeHtml(displayData)}</a>`;
     return html;
 };
@@ -612,6 +615,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     let questionType = '';
     let questionClass = '';
     const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot);
+    const addQueryActionLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot, 'notice-action');
     const authorityNsRecords = (response.authorities || []).filter(record => record.type === 'NS');
     const classifyNsRelationship = (zoneName, nameServerName) => {
         const zone = normalizeDnsName(zoneName) || '.';
@@ -683,7 +687,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += '</dl>';
     let basicInfoNoticeHtml = '';
     if (!sendTcp && !sendHttps && !sendDot && (response.flags & dnsPacket.TRUNCATED_RESPONSE)) {
-        const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
+        const displayData = addQueryActionLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
             true, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'TCPで再確認');
         basicInfoNoticeHtml += `<aside class="basic-info-notice notice-info" role="note">TCフラグが立っているので TCPでの再確認を推奨します。${displayData}</aside>`;
     }
@@ -726,9 +730,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     if (rcode === 'SERVFAIL') {
         answerNoticeHtml += `<p style="color: red; margin: 0;">SERVFAIL: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> で一時的なエラーが発生したか、設定に問題があります。</p>`;
         if (recursionDesired && !checkingDisabled) {
-            const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, true,
-                sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-            answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※DNSSEC検証に失敗した可能性があります。${displayData} をクリックしてみてください。</p>`;
+            const displayData = addQueryActionLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, true,
+                sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'CDフラグで再確認');
+            answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※DNSSEC検証に失敗した可能性があります。${displayData}</p>`;
         }
     } else if (rcode === 'REFUSED') {
         answerNoticeHtml += `<p style="color: red; margin: 0;">REFUSED: 応答したサーバー <code>${escapeHtml(dnsServer)}</code> のポリシーによりクエリーが拒否されました。</p>`;
@@ -749,9 +753,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         if (soaRr.name !== questionName) {
                             answerNoticeHtml += `<p style="color: red; margin: 0;">※応答したサーバー <code>${escapeHtml(dnsServer)}</code> が RFC 8020 に対応していないようです。</p>`;
                         }
-                        const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-                            sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-                        answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてラベルを増やしてみてください。</p>`;
+                        const displayData = addQueryActionLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
+                            sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'ラベルを増やす');
+                        answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっています。${displayData}</p>`;
                     }
                 }
             }
@@ -771,9 +775,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                     if (response.authorities && response.authorities.length > 0) {
                         const soaRr = response.authorities.find(at => at.type === 'SOA');
                         if (soaRr) {
-                            const displayData = addQueryLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-                                sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'こちら');
-                            answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっていますので ${displayData} をクリックしてラベルを増やしてみてください。</p>`;
+                            const displayData = addQueryActionLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
+                                sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'ラベルを増やす');
+                            answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっています。${displayData}</p>`;
                         }
                     }
                 }
