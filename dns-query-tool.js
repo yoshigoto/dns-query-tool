@@ -653,17 +653,17 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += '<div class="result dns-response"><h3>--- DNSレスポンス解析結果 ---</h3>';
     html += '<h4 class="dns-section-title basic-info-title">基本情報</h4>';
     html += '<dl class="basic-info">';
-    html += `<dt>対象ドメイン名</dt><dd><code>${escapeHtml(domainName)}</code></dd>`;
-    html += `<dt>応答したサーバー</dt><dd><code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></dd>`;
-    html += `<dt>応答サイズ</dt><dd><code>${bytesRead}</code> byte</dd>`;
-    html += `<dt>プロトコル</dt><dd><code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code></dd>`;
-    html += `<dt>クエリーID</dt><dd><code>${queryId}</code> <span class="basic-info-status ${response.id === queryId ? 'status-ok' : 'status-warning'}">${response.id === queryId ? '一致' : '不一致'}</span></dd>`;
+    html += `<div class="basic-info-item basic-info-item-wide"><dt>対象ドメイン名</dt><dd><code>${escapeHtml(domainName)}</code></dd></div>`;
+    html += `<div class="basic-info-item basic-info-item-wide"><dt>応答したサーバー</dt><dd><code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></dd></div>`;
+    html += `<div class="basic-info-item"><dt>応答サイズ</dt><dd><code>${bytesRead}</code> byte</dd></div>`;
+    html += `<div class="basic-info-item"><dt>プロトコル</dt><dd><code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code></dd></div>`;
+    html += `<div class="basic-info-item"><dt>クエリーID</dt><dd><code>${queryId}</code> <span class="basic-info-status ${response.id === queryId ? 'status-ok' : 'status-warning'}">${response.id === queryId ? '一致' : '不一致'}</span></dd></div>`;
     const opcodeStr = getOpcodeName(response);
-    html += `<dt>Opcode</dt><dd><code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span class="basic-info-inline-warning">QUERY 以外の Opcode です</span>' : ''}</dd>`;
+    html += `<div class="basic-info-item"><dt>Opcode</dt><dd><code>${escapeHtml(opcodeStr)}</code>${opcodeStr !== 'QUERY' ? ' <span class="basic-info-inline-warning">QUERY 以外の Opcode です</span>' : ''}</dd></div>`;
 
     // 応答コード (rcode) の取得。Extended RCODE は OPT の TTL 上位オクテットから合成する。
     const rcode = getResponseRcode(response);
-    html += `<dt>応答ステータス (rcode)</dt><dd><code>${escapeHtml(rcode)}</code></dd>`;
+    html += `<div class="basic-info-item"><dt>応答ステータス (rcode)</dt><dd><code>${escapeHtml(rcode)}</code></dd></div>`;
 
     // フラグの取得
     let flagString = '';
@@ -694,7 +694,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     if (flagString !== '') {
         flagString = flagString.slice(0, -1);
     }
-    html += `<dt>フラグ (flags)</dt><dd class="basic-info-flags">${flagString || '<span class="basic-info-empty">なし</span>'}</dd>`;
+    html += `<div class="basic-info-item"><dt>フラグ (flags)</dt><dd class="basic-info-flags">${flagString || '<span class="basic-info-empty">なし</span>'}</dd></div>`;
     html += '</dl>';
     let basicInfoNoticeHtml = '';
     if (!sendTcp && !sendHttps && !sendDot && (response.flags & dnsPacket.TRUNCATED_RESPONSE)) {

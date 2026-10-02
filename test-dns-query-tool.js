@@ -596,7 +596,7 @@ test('DoT応答から生成する再検索リンクにDoT設定を引き継ぐ',
     true, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A', null, 'IN', true);
 
     assert.match(html, /dot=1/);
-    assert.match(html, /<dt>応答サイズ<\/dt><dd><code>20<\/code> byte<\/dd><dt>プロトコル<\/dt><dd><code>DoT<\/code><\/dd>/);
+    assert.match(html, /<div class="basic-info-item"><dt>応答サイズ<\/dt><dd><code>20<\/code> byte<\/dd><\/div><div class="basic-info-item"><dt>プロトコル<\/dt><dd><code>DoT<\/code><\/dd><\/div>/);
 });
 
 test('クエリークラスをDNSメッセージと再検索リンクに反映する', async () => {
@@ -955,7 +955,9 @@ test('Opcode, QR(0), Reserved(Z) フラグを解析・表示する', () => {
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /<dt>Opcode<\/dt><dd><code>NOTIFY<\/code> <span class="basic-info-inline-warning">QUERY 以外の Opcode です<\/span><\/dd>/);
+    assert.match(html, /<div class="basic-info-item"><dt>Opcode<\/dt><dd><code>NOTIFY<\/code> <span class="basic-info-inline-warning">QUERY 以外の Opcode です<\/span><\/dd><\/div>/);
+    assert.equal((html.match(/class="basic-info-item basic-info-item-wide"/g) || []).length, 2);
+    assert.equal((html.match(/class="basic-info-item"/g) || []).length, 6);
     assert.match(html, /QUERY 以外の Opcode です/);
     assert.match(html, /class="basic-info-notice notice-warning"[^>]*>応答 \(response\) メッセージなのに QRフラグが立っていませんでした。/);
     assert.match(html, /<span class="dns-flag dns-flag-warning" title="Reserved">Z<\/span>/);
