@@ -754,7 +754,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                             answerNoticeHtml += `<p style="color: red; margin: 0;">※応答したサーバー <code>${escapeHtml(dnsServer)}</code> が RFC 8020 に対応していないようです。</p>`;
                         }
                         const displayData = addQueryActionLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-                            sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'ラベルを増やす');
+                            sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'ラベルを増やして確認');
                         answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっています。${displayData}</p>`;
                     }
                 }
@@ -776,7 +776,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         const soaRr = response.authorities.find(at => at.type === 'SOA');
                         if (soaRr) {
                             const displayData = addQueryActionLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-                                sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'ラベルを増やす');
+                                sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, 'ラベルを増やして確認');
                             answerNoticeHtml += `<p style="color: #E65C00; margin: 0;">※QNAME minimisation が有効になっています。${displayData}</p>`;
                         }
                     }

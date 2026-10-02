@@ -772,7 +772,7 @@ test('DNSSECとQNAME minimisationの案内リンクをアクションボタン�
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'www.example.com', 'A', 100,
     true, false, false, false, false, '/dns-query', false, false, '1232', false, '', true, 1, 'A');
 
-    assert.match(qnameHtml, /QNAME minimisation が有効になっています。<a class="notice-action" data-dns-query-link href="[^"]*qposi=0[^"]*">ラベルを増やす<\/a>/);
+    assert.match(qnameHtml, /QNAME minimisation が有効になっています。<a class="notice-action" data-dns-query-link href="[^"]*qposi=0[^"]*">ラベルを増やして確認<\/a>/);
 });
 
 test('DNSサーバー解決はIPv4失敗時にIPv6を試し、委任先を再帰解決する', async () => {
