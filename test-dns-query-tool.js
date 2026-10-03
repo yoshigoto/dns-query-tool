@@ -47,6 +47,7 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
     assert.equal(isInvalidQueryType('HTTPS'), false);
     assert.equal(isInvalidQueryType('TSIG'), true);
     assert.equal(isInvalidQueryType('TKEY'), true);
+    assert.equal(isInvalidQueryType('OPT'), true);
     assert.equal(isInvalidQueryType('UNKNOWN_65280'), true);
     assert.equal(isInvalidQueryType('VERSION'), true);
     assert.equal(isInvalidQueryType('NOT_A_TYPE'), true);
@@ -74,8 +75,15 @@ test('クエリータイプの選択肢とAPI許可タイプが一致する', ()
     for (const type of resourceRecordDecoderTypes) {
         assert.ok(SUPPORTED_QUERY_TYPES.includes(type), `${type} がAPI許可タイプにありません`);
     }
+    const historicalTypes = /<optgroup label="歴史的・特殊なタイプ">([\s\S]*?)<\/optgroup>/.exec(typeSelect[1]);
+    assert.ok(historicalTypes, '歴史的・特殊なタイプのグループがありません');
+    assert.deepEqual(
+        [...historicalTypes[1].matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value),
+        ['DLV', 'SPF']
+    );
     assert.equal(optionValues.includes('TSIG'), false);
     assert.equal(optionValues.includes('TKEY'), false);
+    assert.equal(optionValues.includes('OPT'), false);
     assert.equal(optionValues[optionValues.indexOf('PTR') + 1], 'PTR-x');
 });
 
@@ -478,12 +486,13 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     testContext.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
     const port = server.address().port;
 
-    const [staticFile, missingName, invalidType, invalidTsigType, invalidTkeyType, invalidUdpSize, invalidServer, invalidDomainEmptyLabel, invalidDomainLabelTooLong] = await Promise.all([
+    const [staticFile, missingName, invalidType, invalidTsigType, invalidTkeyType, invalidOptType, invalidUdpSize, invalidServer, invalidDomainEmptyLabel, invalidDomainLabelTooLong] = await Promise.all([
         request(port, '/dnsquerytool/'),
         request(port, '/dnsquerytool/api/query'),
         request(port, '/dnsquerytool/api/query?name=example.com&type=%3Cscript%3E'),
         request(port, '/dnsquerytool/api/query?name=example.com&type=TSIG'),
         request(port, '/dnsquerytool/api/query?name=example.com&type=TKEY'),
+        request(port, '/dnsquerytool/api/query?name=example.com&type=OPT'),
         request(port, '/dnsquerytool/api/query?name=example.com&udpsize=511'),
         request(port, '/dnsquerytool/api/query?name=example.com&server=127.0.0.1'),
         request(port, '/dnsquerytool/api/query?name=foo..bar'),
@@ -497,6 +506,7 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     assert.doesNotMatch(invalidType.body, /<script>/);
     assert.match(invalidTsigType.body, /不正なクエリータイプ/);
     assert.match(invalidTkeyType.body, /不正なクエリータイプ/);
+    assert.match(invalidOptType.body, /不正なクエリータイプ/);
     assert.match(invalidUdpSize.body, /UDPメッセージサイズを入力し直してください/);
     assert.match(invalidServer.body, /DNSサーバーを選択し直してください/);
     assert.match(invalidDomainEmptyLabel.body, /不正なドメイン名です \('foo\.\.bar' は無効なドメイン名です: 空のラベルが含まれています \(連続したピリオド等\)\)/);
