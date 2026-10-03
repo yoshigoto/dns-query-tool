@@ -11,6 +11,16 @@
     const httpsCheckbox = form.elements.namedItem('https');
     const dotCheckbox = form.elements.namedItem('dot');
     const httpsPathInput = form.elements.namedItem('httpspath');
+    const queryTypeSelect = form.elements.namedItem('type');
+    const ixfrSerialInput = form.elements.namedItem('ixfrserial');
+    const ixfrSerialOption = document.getElementById('ixfr-serial-option');
+
+    const syncQueryTypeControls = () => {
+        const isIxfr = queryTypeSelect.value === 'IXFR';
+        ixfrSerialOption.hidden = !isIxfr;
+        ixfrSerialInput.disabled = !isIxfr;
+        ixfrSerialInput.required = isIxfr;
+    };
 
     const syncTransportControls = (changedControl = null) => {
         if (changedControl?.checked) {
@@ -30,6 +40,7 @@
     };
 
     const restoreForm = (params) => {
+        ixfrSerialInput.value = '';
         for (const [name, value] of params) {
             const control = form.elements.namedItem(name);
             if (!control) continue;
@@ -43,6 +54,7 @@
             }
         }
         syncTransportControls();
+        syncQueryTypeControls();
     };
 
     const setPanelVisible = (visible) => {
@@ -90,7 +102,9 @@
     tcpCheckbox.addEventListener('change', () => syncTransportControls(tcpCheckbox));
     httpsCheckbox.addEventListener('change', () => syncTransportControls(httpsCheckbox));
     dotCheckbox.addEventListener('change', () => syncTransportControls(dotCheckbox));
+    queryTypeSelect.addEventListener('change', syncQueryTypeControls);
     syncTransportControls();
+    syncQueryTypeControls();
 
     results.addEventListener('click', (event) => {
         const link = event.target.closest('a[data-dns-query-link]');

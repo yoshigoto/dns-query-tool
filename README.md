@@ -33,6 +33,12 @@ https://www.on-link.jp/dnsquerytool/
 
 フルサービスリゾルバーに名前解決を任せる場合は、問い合わせ先にフルサービスリゾルバーを指定し、「RD」にチェックを入れてください。
 
+### IXFR のシリアル番号
+
+クエリータイプで `IXFR` を選ぶと「IXFR シリアル番号」欄が表示されます。取得済みゾーンの SOA SERIAL を `0`～`4294967295` の整数で指定してください（必須）。dig の指定は `ixfr=N` です。このツールでは `type=IXFR&ixfrserial=N` として URL に保持し、問い合わせの AUTHORITY セクションに指定した SERIAL の SOA レコードを追加します。
+
+UDP でも問い合わせできますが、応答が収まらない場合は TCP で再確認してください。現在は単一 DNS 応答の解析・表示のみで、複数メッセージにわたる IXFR/AXFR の転送全体の受信やゾーンの更新には対応していません。QNAME minimisation の途中では通常の A/NS 問い合わせを行い、最終的な IXFR 問い合わせにのみ SOA を追加します。
+
 ## ローカルで実行する
 
 ### 必要な環境
@@ -69,6 +75,7 @@ node dns-query-tool.js
 | クエリー先DNSサーバー | `server` | DNSサーバー (権威サーバー、フルサービスリゾルバー) のホスト名またはIPアドレス (省略時は `a.root-servers.net`) |
 | 対象ドメイン名 (name) | `name` | 問い合わせ対象のドメイン名 |
 | クエリータイプ (type) | `type` | `A`、`AAAA`、`MX`、`NS`、`SOA`、`TXT`、`CNAME`、`DNAME`、`CAA`、`DNSKEY`、`DS`、`NSEC`、`NSEC3`、`RRSIG`、`SRV`、`HTTPS`、`SVCB`、`PTR`、`PTR-x`、`ANY`、`VERSION` |
+| IXFR シリアル番号 | `ixfrserial` | `type=IXFR` のとき必須。取得済みゾーンの SOA SERIAL (`0`～`4294967295`)。他のクエリータイプでは使用しない |
 | 再帰検索の要求 (RD) | `rd=1` | RDフラグを付ける |
 | チェックの無効化 (CD) | `cd=1` | CDフラグを付ける |
 | QNAME minimisation | `qmini=1` | QNAME minimisationを有効にする |
