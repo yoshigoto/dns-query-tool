@@ -266,12 +266,10 @@
                     <input type="checkbox" id="rd" name="rd" value="1">
                     <label class="label-description" for="rd">(クエリー先がフルサービスリゾルバーのときはチェック)</label>
                 </div>
-                <div class="option-group">
-                    <div class="option-div">
-                        <label for="cd" class="label-wide">チェックの無効化 (CD):</label>
-                        <input type="checkbox" id="cd" name="cd" value="1">
-                        <label class="label-description" for="cd">(DNSSEC検証を無効化したいときはチェック)</label>
-                    </div>
+                <div class="option-div">
+                    <label for="cd" class="label-wide">チェックの無効化 (CD):</label>
+                    <input type="checkbox" id="cd" name="cd" value="1">
+                    <label class="label-description" for="cd">(クエリー先に対して DNSSEC検証をしないよう要求したいときはチェック)</label>
                 </div>
                 <div>
                     <button type="submit">DNSメッセージを送信</button> 
