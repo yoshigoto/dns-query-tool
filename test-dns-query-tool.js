@@ -57,11 +57,12 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
 test('クエリータイプの選択肢は dns-packet の全対応型を含み、特別な型を所定位置に置く', () => {
     const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
     const optionValues = [...indexHtml.matchAll(/<option value="([^"]+)">/g)].map(([, value]) => value);
-    const packetTypes = Object.keys(dnsPacket.types || {}).filter(type => /^[A-Z][A-Z0-9]*$/.test(type));
+    const packetTypes = Object.keys(dnsPacket.types || {}).filter(type => /^[A-Z][A-Z0-9]*$/.test(type) && type !== 'TKEY');
 
     for (const type of packetTypes) {
         assert.ok(optionValues.includes(type), `${type} が選択肢にありません`);
     }
+    assert.equal(optionValues.includes('TKEY'), false);
     assert.equal(optionValues[optionValues.indexOf('PTR') + 1], 'PTR-x');
     assert.equal(optionValues.includes('VERSION'), false);
 });
