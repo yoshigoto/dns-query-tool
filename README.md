@@ -37,7 +37,7 @@ https://www.on-link.jp/dnsquerytool/
 
 クエリータイプで `IXFR` を選ぶと「IXFR シリアル番号」欄が表示されます。取得済みゾーンの SOA SERIAL を `0`～`4294967295` の整数で指定してください（必須）。dig の指定は `ixfr=N` です。このツールでは `type=IXFR&ixfrserial=N` として URL に保持し、問い合わせの AUTHORITY セクションに指定した SERIAL の SOA レコードを追加します。
 
-UDP でも問い合わせできますが、応答が収まらない場合は TCP で再確認してください。現在は単一 DNS 応答の解析・表示のみで、複数メッセージにわたる IXFR/AXFR の転送全体の受信やゾーンの更新には対応していません。QNAME minimisation の途中では通常の A/NS 問い合わせを行い、最終的な IXFR 問い合わせにのみ SOA を追加します。
+AXFR は [RFC 5936](https://datatracker.ietf.org/doc/html/rfc5936#section-2.2) により TCP を使用します。TCP送受信を有効にせず AXFR を問い合わせた場合、応答の基本情報に RFC 非準拠の案内を表示します。IXFR は UDP でも問い合わせできますが、応答が収まらない場合は TCP で再確認してください。現在は単一 DNS 応答の解析・表示のみで、複数メッセージにわたる IXFR/AXFR の転送全体の受信やゾーンの更新には対応していません。QNAME minimisation の途中では通常の A/NS 問い合わせを行い、最終的な IXFR 問い合わせにのみ SOA を追加します。
 
 ## ローカルで実行する
 

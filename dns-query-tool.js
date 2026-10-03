@@ -711,6 +711,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     if (response.type === 'query') {
         basicInfoNoticeHtml += '<aside class="basic-info-notice notice-warning" role="note">応答 (response) メッセージなのに QRフラグが立っていませんでした。</aside>';
     }
+    if (queryType === 'AXFR' && !sendTcp) {
+        basicInfoNoticeHtml += '<aside class="basic-info-notice notice-warning" role="note">AXFR クエリーでは TCP での送受信が求められます。<a href="https://datatracker.ietf.org/doc/html/rfc5936#section-2.2" target="_blank">RFC 5936</a> で規定されているため、この設定では RFC に準拠しません。</aside>';
+    }
     html += basicInfoNoticeHtml;
 
     // QUESTION SECTION
