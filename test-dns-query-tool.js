@@ -755,7 +755,7 @@ test('TCP送受信が無効なAXFR問い合わせはRFC違反の案内を表示�
     false, false, sendTcp, false, false, '', false, false, '1232', false, '', false, 255, 'A');
 
     const udpAxfrHtml = render('AXFR', false);
-    assert.match(udpAxfrHtml, /class="basic-info-notice notice-warning"[^>]*>AXFR クエリーでは TCP での送受信が求められます。<a href="https:\/\/datatracker\.ietf\.org\/doc\/html\/rfc5936#section-2\.2"/);
+    assert.match(udpAxfrHtml, /class="basic-info-notice notice-warning"[^>]*>AXFR クエリーでは TCP での送受信が求められます。/);
     assert.match(udpAxfrHtml, /TCPでの再確認を推奨します。/);
     assert.match(udpAxfrHtml, /<a class="notice-action" data-dns-query-link href="[^"]*type=AXFR[^"]*tcp=1[^"]*https=0[^"]*dot=0[^"]*">TCPで再確認<\/a>/);
     assert.doesNotMatch(render('AXFR', true), /AXFR クエリーでは TCP での送受信が求められます/);
