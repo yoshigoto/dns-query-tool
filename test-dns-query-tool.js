@@ -742,6 +742,26 @@ test('UDP応答のTCフラグはTCP再確認アクションを表示する', () 
     assert.match(html, /<a class="notice-action" data-dns-query-link href="[^"]*tcp=1[^"]*">TCPで再確認<\/a>/);
 });
 
+test('TCP送受信が無効なAXFR問い合わせはRFC違反の案内を表示する', () => {
+    const render = (queryType, sendTcp) => makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: queryType }],
+        answers: [],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', queryType, 100,
+    false, false, sendTcp, false, false, '', false, false, '1232', false, '', false, 255, 'A');
+
+    const udpAxfrHtml = render('AXFR', false);
+    assert.match(udpAxfrHtml, /class="basic-info-notice notice-warning"[^>]*>AXFR クエリーでは TCP での送受信が求められます。/);
+    assert.match(udpAxfrHtml, /TCPでの再確認を推奨します。/);
+    assert.match(udpAxfrHtml, /<a class="notice-action" data-dns-query-link href="[^"]*type=AXFR[^"]*tcp=1[^"]*https=0[^"]*dot=0[^"]*">TCPで再確認<\/a>/);
+    assert.doesNotMatch(render('AXFR', true), /AXFR クエリーでは TCP での送受信が求められます/);
+    assert.doesNotMatch(render('A', false), /AXFR クエリーでは TCP での送受信が求められます/);
+});
+
 test('DNSSECとQNAME minimisationの案内リンクをアクションボタンで表示する', () => {
     const dnssecHtml = makeHtmlFromDns({
         id: 100,

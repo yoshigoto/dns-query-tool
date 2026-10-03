@@ -711,6 +711,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     if (response.type === 'query') {
         basicInfoNoticeHtml += '<aside class="basic-info-notice notice-warning" role="note">応答 (response) メッセージなのに QRフラグが立っていませんでした。</aside>';
     }
+    if (queryType === 'AXFR' && !sendTcp && !sendHttps && !sendDot) {
+        const displayData = addLinkToDisplayData(origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
+            true, sendIpv6, false, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType,
+            'TCPで再確認', queryClass, false, 'notice-action', ixfrSerial);
+        basicInfoNoticeHtml += `<aside class="basic-info-notice notice-warning" role="note">AXFR クエリーでは TCP での送受信が求められます。RFC 5936 で規定されているため、TCPでの再確認を推奨します。${displayData}</aside>`;
+    }
     html += basicInfoNoticeHtml;
 
     // QUESTION SECTION
