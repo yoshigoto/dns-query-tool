@@ -1484,17 +1484,16 @@ const isInvalidHttpsPath = (httpsPath) => {
     return !/^\/[!-~]*$/.test(httpsPath) || httpsPath.length > 512;
 };
 
+const SUPPORTED_QUERY_TYPES = Object.freeze([
+    'A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'PTR', 'PTR-x', 'SRV', 'CAA', 'ANY',
+    'DS', 'DNSKEY', 'RRSIG', 'NSEC', 'NSEC3', 'NSEC3PARAM', 'CDS', 'CDNSKEY', 'TA', 'DLV',
+    'TLSA', 'SSHFP', 'NAPTR', 'CERT', 'IPSECKEY', 'HIP', 'DHCID',
+    'SVCB', 'HTTPS', 'DNAME', 'NULL', 'HINFO', 'RP', 'AFSDB', 'SIG', 'KEY', 'LOC', 'KX', 'OPT', 'APL', 'SPF',
+    'IXFR', 'AXFR'
+]);
+
 const isInvalidQueryType = (queryType) => {
-    if (queryType === 'PTR-x') {
-        return false;
-    }
-
-    if (/^UNKNOWN_\d+$/.test(queryType)) {
-        return true;
-    }
-
-    const typeCode = dnsTypes.toType(replaceKnownToUnknownRrType(queryType));
-    return !Number.isInteger(typeCode) || typeCode < 1 || typeCode > 65535;
+    return !SUPPORTED_QUERY_TYPES.includes(queryType);
 };
 
 const isInvalidQueryClass = (queryClass) => {
@@ -2512,6 +2511,7 @@ module.exports = {
     reverseIPv6,
     resolveDnsServerAddress,
     server,
+    SUPPORTED_QUERY_TYPES,
     validateDomainName,
     validateMQType
 };
