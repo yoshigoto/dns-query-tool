@@ -62,11 +62,18 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
 test('クエリータイプの選択肢とAPI許可タイプが一致する', () => {
     const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
     const typeSelect = /<select id="type" name="type">([\s\S]*?)<\/select>/.exec(indexHtml);
+    const resourceRecordDecoderTypes = [
+        'TXT', 'SPF', 'NSEC3PARAM', 'CDS', 'CDNSKEY', 'CAA', 'DNSKEY', 'DS', 'NSEC', 'NSEC3',
+        'RRSIG', 'SOA', 'SRV', 'TLSA', 'SSHFP', 'NAPTR', 'SVCB', 'HTTPS'
+    ];
 
     assert.ok(typeSelect, 'クエリータイプの select がありません');
     const optionValues = [...typeSelect[1].matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value);
 
     assert.deepEqual(optionValues, SUPPORTED_QUERY_TYPES);
+    for (const type of resourceRecordDecoderTypes) {
+        assert.ok(SUPPORTED_QUERY_TYPES.includes(type), `${type} がAPI許可タイプにありません`);
+    }
     assert.equal(optionValues.includes('TSIG'), false);
     assert.equal(optionValues.includes('TKEY'), false);
     assert.equal(optionValues[optionValues.indexOf('PTR') + 1], 'PTR-x');
