@@ -74,7 +74,7 @@ node dns-query-tool.js
 | --- | --- | --- |
 | クエリー先DNSサーバー | `server` | DNSサーバー (権威サーバー、フルサービスリゾルバー) のホスト名またはIPアドレス (省略時は `a.root-servers.net`) |
 | 対象ドメイン名 (name) | `name` | 問い合わせ対象のドメイン名 |
-| クエリータイプ (type) | `type` | `A`、`AAAA`、`MX`、`NS`、`SOA`、`TXT`、`CNAME`、`DNAME`、`CAA`、`DNSKEY`、`DS`、`NSEC`、`NSEC3`、`RRSIG`、`SRV`、`HTTPS`、`SVCB`、`PTR`、`PTR-x`、`ANY`、`VERSION` |
+| クエリータイプ (type) | `type` | `index.html` の選択肢にあるタイプのみ受付。TSIG、TKEYなど選択肢にないタイプはAPIでも拒否 |
 | IXFR シリアル番号 | `ixfrserial` | `type=IXFR` のとき必須。取得済みゾーンの SOA SERIAL (`0`～`4294967295`)。他のクエリータイプでは使用しない |
 | 再帰検索の要求 (RD) | `rd=1` | RDフラグを付ける |
 | チェックの無効化 (CD) | `cd=1` | CDフラグを付ける |

@@ -20,6 +20,7 @@ const {
     reverseIPv6,
     resolveDnsServerAddress,
     server,
+    SUPPORTED_QUERY_TYPES,
     validateDomainName,
     validateMQType
 } = require('./dns-query-tool');
@@ -42,6 +43,10 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
     assert.equal(isInvalidQueryType('IXFR'), false);
     assert.equal(isInvalidQueryType('NSEC3PARAM'), false);
     assert.equal(isInvalidQueryType('TA'), false);
+    assert.equal(isInvalidQueryType('SVCB'), false);
+    assert.equal(isInvalidQueryType('HTTPS'), false);
+    assert.equal(isInvalidQueryType('TSIG'), true);
+    assert.equal(isInvalidQueryType('TKEY'), true);
     assert.equal(isInvalidQueryType('UNKNOWN_65280'), true);
     assert.equal(isInvalidQueryType('VERSION'), true);
     assert.equal(isInvalidQueryType('NOT_A_TYPE'), true);
@@ -54,17 +59,17 @@ test('クエリータイプ、フラグ、逆引き名を正しく処理する',
     assert.equal(reverseIPv6('2001:db8::1'), '1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2');
 });
 
-test('クエリータイプの選択肢は dns-packet の全対応型を含み、特別な型を所定位置に置く', () => {
+test('クエリータイプの選択肢とAPI許可タイプが一致する', () => {
     const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-    const optionValues = [...indexHtml.matchAll(/<option value="([^"]+)">/g)].map(([, value]) => value);
-    const packetTypes = Object.keys(dnsPacket.types || {}).filter(type => /^[A-Z][A-Z0-9]*$/.test(type) && type !== 'TKEY');
+    const typeSelect = /<select id="type" name="type">([\s\S]*?)<\/select>/.exec(indexHtml);
 
-    for (const type of packetTypes) {
-        assert.ok(optionValues.includes(type), `${type} が選択肢にありません`);
-    }
+    assert.ok(typeSelect, 'クエリータイプの select がありません');
+    const optionValues = [...typeSelect[1].matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value);
+
+    assert.deepEqual(optionValues, SUPPORTED_QUERY_TYPES);
+    assert.equal(optionValues.includes('TSIG'), false);
     assert.equal(optionValues.includes('TKEY'), false);
     assert.equal(optionValues[optionValues.indexOf('PTR') + 1], 'PTR-x');
-    assert.equal(optionValues.includes('VERSION'), false);
 });
 
 test('クエリークラスはメニューで選択する', () => {
@@ -466,10 +471,12 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     testContext.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
     const port = server.address().port;
 
-    const [staticFile, missingName, invalidType, invalidUdpSize, invalidServer, invalidDomainEmptyLabel, invalidDomainLabelTooLong] = await Promise.all([
+    const [staticFile, missingName, invalidType, invalidTsigType, invalidTkeyType, invalidUdpSize, invalidServer, invalidDomainEmptyLabel, invalidDomainLabelTooLong] = await Promise.all([
         request(port, '/dnsquerytool/'),
         request(port, '/dnsquerytool/api/query'),
         request(port, '/dnsquerytool/api/query?name=example.com&type=%3Cscript%3E'),
+        request(port, '/dnsquerytool/api/query?name=example.com&type=TSIG'),
+        request(port, '/dnsquerytool/api/query?name=example.com&type=TKEY'),
         request(port, '/dnsquerytool/api/query?name=example.com&udpsize=511'),
         request(port, '/dnsquerytool/api/query?name=example.com&server=127.0.0.1'),
         request(port, '/dnsquerytool/api/query?name=foo..bar'),
@@ -481,6 +488,8 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     assert.equal(missingName.statusCode, 400);
     assert.match(invalidType.body, /不正なクエリータイプ/);
     assert.doesNotMatch(invalidType.body, /<script>/);
+    assert.match(invalidTsigType.body, /不正なクエリータイプ/);
+    assert.match(invalidTkeyType.body, /不正なクエリータイプ/);
     assert.match(invalidUdpSize.body, /UDPメッセージサイズを入力し直してください/);
     assert.match(invalidServer.body, /DNSサーバーを選択し直してください/);
     assert.match(invalidDomainEmptyLabel.body, /不正なドメイン名です \('foo\.\.bar' は無効なドメイン名です: 空のラベルが含まれています \(連続したピリオド等\)\)/);
