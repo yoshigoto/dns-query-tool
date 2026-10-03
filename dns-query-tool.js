@@ -1486,9 +1486,9 @@ const isInvalidHttpsPath = (httpsPath) => {
 
 const SUPPORTED_QUERY_TYPES = Object.freeze([
     'A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'PTR', 'PTR-x', 'SRV', 'CAA', 'ANY',
-    'DS', 'DNSKEY', 'RRSIG', 'NSEC', 'NSEC3', 'NSEC3PARAM', 'CDS', 'CDNSKEY', 'TA', 'DLV',
+    'DS', 'DNSKEY', 'RRSIG', 'NSEC', 'NSEC3', 'NSEC3PARAM', 'CDS', 'CDNSKEY', 'TA',
     'TLSA', 'SSHFP', 'NAPTR', 'CERT', 'IPSECKEY', 'HIP', 'DHCID',
-    'SVCB', 'HTTPS', 'DNAME', 'NULL', 'HINFO', 'RP', 'AFSDB', 'SIG', 'KEY', 'LOC', 'KX', 'OPT', 'APL', 'SPF',
+    'SVCB', 'HTTPS', 'DNAME', 'NULL', 'HINFO', 'RP', 'AFSDB', 'SIG', 'KEY', 'LOC', 'KX', 'APL', 'DLV', 'SPF',
     'IXFR', 'AXFR'
 ]);
 
