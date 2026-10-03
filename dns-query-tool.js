@@ -284,7 +284,7 @@ const escapeHtml = (str) => {
 };
 
 const addLinkToDisplayData = (origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
-    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, displayData, queryClass='IN', sendDot=false, linkClass='') => {
+    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, displayData, queryClass='IN', sendDot=false, linkClass='', ixfrSerial=null) => {
     const query = new URLSearchParams({
         server: dnsServer,
         name: domainName,
@@ -306,6 +306,9 @@ const addLinkToDisplayData = (origin, pathname, dnsServer, domainName, queryType
         qposi: qnamePosition,
         qtype: qnameType
     });
+    if (queryType === 'IXFR' && ixfrSerial !== null) {
+        query.set('ixfrserial', String(ixfrSerial));
+    }
     let html = '<a ';
     if (linkClass) {
         html = `<a class="${escapeHtml(linkClass)}" `;
@@ -609,13 +612,13 @@ const wrapSectionNoticeHtml = (noticeHtml) => {
 };
 
 const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsServerIp, domainName, queryType, queryId, recursionDesired, checkingDisabled,
-    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, rawBuf = null, queryClass = 'IN', sendDot = false) => {
+    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, rawBuf = null, queryClass = 'IN', sendDot = false, ixfrSerial = null) => {
     let html = '';
     let questionName = '';
     let questionType = '';
     let questionClass = '';
-    const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot);
-    const addQueryActionLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot, 'notice-action');
+    const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot, '', ixfrSerial);
+    const addQueryActionLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot, 'notice-action', ixfrSerial);
     const authorityNsRecords = (response.authorities || []).filter(record => record.type === 'NS');
     const nameServerAuthorities = new Map();
     let fallbackAuthority = null;
@@ -654,6 +657,9 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     html += '<h4 class="dns-section-title basic-info-title">基本情報</h4>';
     html += '<dl class="basic-info">';
     html += `<div class="basic-info-item basic-info-item-wide"><dt>対象ドメイン名</dt><dd><code>${escapeHtml(domainName)}</code></dd></div>`;
+    if (queryType === 'IXFR' && ixfrSerial !== null) {
+        html += `<div class="basic-info-item"><dt>IXFR シリアル番号</dt><dd><code>${escapeHtml(ixfrSerial)}</code></dd></div>`;
+    }
     html += `<div class="basic-info-item basic-info-item-wide"><dt>応答したサーバー</dt><dd><code>${escapeHtml(dnsServer)} (${escapeHtml(dnsServerIp)})</code></dd></div>`;
     html += `<div class="basic-info-item"><dt>応答サイズ</dt><dd><code>${bytesRead}</code> byte</dd></div>`;
     html += `<div class="basic-info-item"><dt>プロトコル</dt><dd><code>${sendHttps ? 'HTTPS' : (sendDot ? 'DoT' : (sendTcp ? 'TCP' : 'UDP'))}</code></dd></div>`;
@@ -1939,6 +1945,7 @@ const server = http.createServer(async (req, res) => {
     const rawDomainName = params.get('name') || '';
     const rawQueryType = params.get('type') || 'A';
     const rawQueryClass = params.get('class') || 'IN';
+    const rawIxfrSerial = params.get('ixfrserial');
     const recursionDesired = params.get('rd') === '1';
     const checkingDisabled = params.get('cd') === '1';
     const qnameMinimisation = params.get('qmini') === '1';
@@ -1995,6 +2002,16 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
         return;
+    }
+
+    let ixfrSerial = null;
+    if (queryType === 'IXFR') {
+        if (rawIxfrSerial === null || !/^[0-9]+$/.test(rawIxfrSerial) || Number(rawIxfrSerial) > 0xffffffff) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end('<div class="result error"><p>エラー: IXFR シリアル番号を 0～4294967295 の整数で指定してください。</p></div>');
+            return;
+        }
+        ixfrSerial = Number(rawIxfrSerial);
     }
 
     // 対象ドメイン名のバリデーションチェック (PTR-x 以外)
@@ -2118,6 +2135,24 @@ const server = http.createServer(async (req, res) => {
             name: qName
         }]
     };
+    if (qType === 'IXFR') {
+        // RFC 1995: SERIAL 以外の SOA RDATA フィールドは 0 / ルート名で送信する。
+        queryPacket.authorities = [{
+            type: 'SOA',
+            name: qName,
+            class: qClass,
+            ttl: 0,
+            data: {
+                mname: '.',
+                rname: '.',
+                serial: ixfrSerial,
+                refresh: 0,
+                retry: 0,
+                expire: 0,
+                minimum: 0
+            }
+        }];
+    }
     if (edns0Enable) {
         const edns0Option = {
             type: 'OPT',
@@ -2224,7 +2259,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     const bytesRead = dnsPacket.decode.bytes;
                     html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass, sendDot);
+                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass, sendDot, ixfrSerial);
                 } catch (err) {
                     html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
                 } finally {
@@ -2265,7 +2300,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 const bytesRead = dnsPacket.streamDecode.bytes;
                 html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, rawBuffer, qClass, sendDot);
+                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, rawBuffer, qClass, sendDot, ixfrSerial);
             } catch (error) {
                 html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(error.message)}</p>${analyzeDnsPacketError(rawBuffer, error, true)}</div>`;
             }
@@ -2298,7 +2333,7 @@ const server = http.createServer(async (req, res) => {
                 html += `<div class="result error"><p>タイムアウト: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答がありませんでした。</p>`;
                 if (qnameMinimisation) {
                     const resetQMiniHtml = addLinkToDisplayData(parsedUrl.origin, parsedUrl.pathname, 'a.root-servers.net', domainName, queryType, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, '255', qnameType, 'こちら', qClass);
+                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, '255', qnameType, 'こちら', qClass, sendDot, '', ixfrSerial);
                     html += `<p>※問い合わせたのは <strong>${escapeHtml(qName)}</strong> でした。${resetQMiniHtml} で QNAME minimisation の状態をリセットしてみてください。</p>`;
                 }
                 html += `</div>`;
@@ -2337,7 +2372,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     const bytesRead = dnsPacket.streamDecode.bytes;
                     resultHtml += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, receivedBuffer, qClass, sendDot);
+                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, receivedBuffer, qClass, sendDot, ixfrSerial);
                 } catch (err) {
                     html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err, true)}</div>`;
                 } finally {
@@ -2387,7 +2422,7 @@ const server = http.createServer(async (req, res) => {
                 html += `<div class="result error"><p>タイムアウト: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答がありませんでした。</p>`;
                 if (qnameMinimisation) {
                     const resetQMiniHtml = addLinkToDisplayData(parsedUrl.origin, parsedUrl.pathname, 'a.root-servers.net', domainName, queryType, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, '255', qnameType, 'こちら', qClass);
+                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, '255', qnameType, 'こちら', qClass, sendDot, '', ixfrSerial);
                     html += `<p>※問い合わせたのは <strong>${escapeHtml(qName)}</strong> でした。${resetQMiniHtml} で QNAME minimisation の状態をリセットしてみてください。</p>`;
                 }
                 html += `</div>`;
@@ -2410,7 +2445,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 const bytesRead = dnsPacket.decode.bytes;
                 html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass, sendDot);
+                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass, sendDot, ixfrSerial);
             } catch (err) {
                 html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
             } finally {
