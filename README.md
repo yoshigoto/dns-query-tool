@@ -57,14 +57,14 @@ node dns-query-tool.js
 
 http://127.0.0.1:3000/
 
-`http://127.0.0.1:3000/dns-query-tool/` でもアクセスできます。`/dns-query-tool/` は既定のアプリケーションパスで、nginx などのリバースプロキシ配下で使う場合に利用します。
+`http://127.0.0.1:3000/dns-query-tool/` でもアクセスできます。`/dns-query-tool/` は公開サイトと同じ既定のアプリケーションパスで、nginx などのリバースプロキシ配下で使う場合に利用します。
 
-サーバーは `127.0.0.1:3000` のみで待ち受けます。nginx からは `proxy_pass http://127.0.0.1:3000;` で転送してください。外部ホストから Node.js へ直接接続することはできません。公開環境などでアプリケーションのパスを変更する場合は、`APPLICATION_PATH` 環境変数を指定できます。
+サーバーは `127.0.0.1:3000` のみで待ち受けます。nginx からは `proxy_pass http://127.0.0.1:3000;` で転送してください。外部ホストから Node.js へ直接接続することはできません。アプリケーションのパスを変更する場合は、`APPLICATION_PATH` 環境変数を指定できます。
 
-環境変数を指定する場合:
+別のパスに変更する場合:
 
 ```sh
-APPLICATION_PATH=/dns-query-tool \
+APPLICATION_PATH=/custom-path \
 node dns-query-tool.js
 ```
 
@@ -77,7 +77,7 @@ node dns-query-tool.js
 | 対象ドメイン名 (name) | `name` | 問い合わせ対象のドメイン名 |
 | クエリー先DNSサーバー | `server` | DNSサーバー (権威サーバー、フルサービスリゾルバー) のホスト名またはIPアドレス (省略時は `a.root-servers.net`) |
 | クエリータイプ (type) | `type` | `index.html` の選択肢にあるタイプのみ受付。DLV、SPFは「歴史的・特殊なタイプ」、OPT、TSIG、TKEYなど選択肢にないタイプはAPIでも拒否。EDNSはクエリータイプではなくEDNS0設定で有効化 |
-| クエリークラス (class) | `class` | `index.html` の選択肢にあるタイプのみ受付。通常は `IN` を指定する。 |
+| クエリークラス (class) | `class` | `index.html` の選択肢 (`IN`、`CS`、`CH`、`HS`、`ANY`) から指定。通常は `IN` を指定する。 |
 | IXFR シリアル番号 | `ixfrserial` | `type=IXFR` のとき必須。取得済みゾーンの SOA SERIAL (`0`～`4294967295`)。他のクエリータイプでは使用しない |
 | QNAME minimisation | `qmini=1` | QNAME minimisationを有効にする |
 | - | `qposi` | QNAME minimisationで問い合わせるラベル位置 |
@@ -90,7 +90,7 @@ node dns-query-tool.js
 | IPv6送受信 | `ipv6=1` | DNSサーバー名の解決やクエリー送信の際にIPv6を優先する |
 | TCP送受信 | `tcp=1` | TCPで問い合わせる |
 | TLS送受信 | `dot=1` | TLSでポート853へ問い合わせる。接続先の証明書を検証する |
-| HTTPS送受信 | `doh=1` | HTTPSでポート443へ問い合わせる。接続先の証明書を検証する |
+| HTTPS送受信 | `https=1` | HTTPSでポート443へ問い合わせる。接続先の証明書を検証する |
 | 再帰検索の要求 (RD) | `rd=1` | RDフラグを付ける |
 | チェックの無効化 (CD) | `cd=1` | CDフラグを付ける |
 
@@ -111,7 +111,7 @@ http://127.0.0.1:3000/dns-query-tool/api/query?server=8.8.8.8&name=example.com&t
 | `dns-query-tool.js` | HTTPサーバー、DNSメッセージ生成、UDP/TCP通信、応答解析、HTML生成 |
 | `test-mqtype.js` | MQTYPEオプションの構築と応答解析の簡易テスト |
 | `test-ixfr.js` | IXFRオプションの構築と応答解析の簡易テスト |
-| `test-dns-query-tools.js` | DNSクエリーツール全体の簡易テスト |
+| `test-dns-query-tool.js` | DNSクエリーツール全体の簡易テスト |
 | `package.json` | Node.js依存関係の定義 |
 
 ## MQTYPEテスト

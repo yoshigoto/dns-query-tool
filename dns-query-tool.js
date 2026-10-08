@@ -1906,7 +1906,7 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
     throw new Error('DNSサーバー名の解決で委任を辿る回数が上限を超えました。');
 };
 
-const APPLICATION_PATH = process.env.APPLICATION_PATH || '/dnsquerytool';
+const APPLICATION_PATH = process.env.APPLICATION_PATH || '/dns-query-tool';
 
 const server = http.createServer(async (req, res) => {
     if (req.url === '/favicon.ico') {

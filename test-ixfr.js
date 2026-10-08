@@ -14,7 +14,7 @@ const request = (port, params) => new Promise((resolve, reject) => {
     http.get({
         host: '127.0.0.1',
         port,
-        path: `/dnsquerytool/api/query?${new URLSearchParams({ server: '8.8.8.8', name: 'example.com.', ...params })}`
+        path: `/dns-query-tool/api/query?${new URLSearchParams({ server: '8.8.8.8', name: 'example.com.', ...params })}`
     }, (response) => {
         let body = '';
         response.setEncoding('utf8');
@@ -141,7 +141,7 @@ test('IXFR の入力欄は選択・URL 復元・履歴・リンクに追従す�
     };
     const windowListeners = {};
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'dns-query-tool-client.js'), 'utf8'), {
-        document: { baseURI: 'http://localhost/dnsquerytool/', getElementById: (id) => elements[id] },
+        document: { baseURI: 'http://localhost/dns-query-tool/', getElementById: (id) => elements[id] },
         URL, URLSearchParams,
         RadioNodeList: class {},
         location: { search: '?type=IXFR&ixfrserial=4294967295' },
@@ -161,7 +161,7 @@ test('IXFR の入力欄は選択・URL 復元・履歴・リンクに追従す�
     assert.equal(elements['ixfr-serial-option'].hidden, true);
 
     elements.results.listeners.click({
-        target: { closest: () => ({ href: 'http://localhost/dnsquerytool/?type=IXFR&ixfrserial=0' }) },
+        target: { closest: () => ({ href: 'http://localhost/dns-query-tool/?type=IXFR&ixfrserial=0' }) },
         preventDefault() {}
     });
     assert.equal(controls.ixfrserial.value, '0');
@@ -170,7 +170,7 @@ test('IXFR の入力欄は選択・URL 復元・履歴・リンクに追従す�
     assert.equal(controls.ixfrserial.value, '4294967295');
 
     elements.results.listeners.click({
-        target: { closest: () => ({ href: 'http://localhost/dnsquerytool/?type=A' }) },
+        target: { closest: () => ({ href: 'http://localhost/dns-query-tool/?type=A' }) },
         preventDefault() {}
     });
     assert.equal(controls.ixfrserial.value, '');

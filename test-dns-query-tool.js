@@ -487,16 +487,16 @@ test('HTTP入力境界はDNS通信前にエラーを返す', async (testContext)
     const port = server.address().port;
 
     const [staticFile, missingName, invalidType, invalidTsigType, invalidTkeyType, invalidOptType, invalidUdpSize, invalidServer, invalidDomainEmptyLabel, invalidDomainLabelTooLong] = await Promise.all([
-        request(port, '/dnsquerytool/'),
-        request(port, '/dnsquerytool/api/query'),
-        request(port, '/dnsquerytool/api/query?name=example.com&type=%3Cscript%3E'),
-        request(port, '/dnsquerytool/api/query?name=example.com&type=TSIG'),
-        request(port, '/dnsquerytool/api/query?name=example.com&type=TKEY'),
-        request(port, '/dnsquerytool/api/query?name=example.com&type=OPT'),
-        request(port, '/dnsquerytool/api/query?name=example.com&udpsize=511'),
-        request(port, '/dnsquerytool/api/query?name=example.com&server=127.0.0.1'),
-        request(port, '/dnsquerytool/api/query?name=foo..bar'),
-        request(port, `/dnsquerytool/api/query?name=${'a'.repeat(64)}.com`)
+        request(port, '/dns-query-tool/'),
+        request(port, '/dns-query-tool/api/query'),
+        request(port, '/dns-query-tool/api/query?name=example.com&type=%3Cscript%3E'),
+        request(port, '/dns-query-tool/api/query?name=example.com&type=TSIG'),
+        request(port, '/dns-query-tool/api/query?name=example.com&type=TKEY'),
+        request(port, '/dns-query-tool/api/query?name=example.com&type=OPT'),
+        request(port, '/dns-query-tool/api/query?name=example.com&udpsize=511'),
+        request(port, '/dns-query-tool/api/query?name=example.com&server=127.0.0.1'),
+        request(port, '/dns-query-tool/api/query?name=foo..bar'),
+        request(port, `/dns-query-tool/api/query?name=${'a'.repeat(64)}.com`)
     ]);
 
     assert.equal(staticFile.statusCode, 200);
