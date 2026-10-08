@@ -4,7 +4,7 @@ Webブラウザからの操作によりDNSクエリーを送信し、受信し�
 
 ## 公開サイト
 
-https://www.on-link.jp/dnsquerytool/
+https://www.on-link.jp/dns-query-tool/
 
 ## 主な機能
 
@@ -55,14 +55,16 @@ node dns-query-tool.js
 
 起動後、次のURLを開きます。
 
-http://127.0.0.1:3000/dnsquerytool/
+http://127.0.0.1:3000/
+
+`http://127.0.0.1:3000/dns-query-tool/` でもアクセスできます。`/dns-query-tool/` は既定のアプリケーションパスで、nginx などのリバースプロキシ配下で使う場合に利用します。
 
 サーバーは `127.0.0.1:3000` のみで待ち受けます。nginx からは `proxy_pass http://127.0.0.1:3000;` で転送してください。外部ホストから Node.js へ直接接続することはできません。公開環境などでアプリケーションのパスを変更する場合は、`APPLICATION_PATH` 環境変数を指定できます。
 
 環境変数を指定する場合:
 
 ```sh
-APPLICATION_PATH=/dnsquerytool \
+APPLICATION_PATH=/dns-query-tool \
 node dns-query-tool.js
 ```
 
@@ -95,7 +97,7 @@ APIのエンドポイントは、アプリケーションパスからの相対�
 例:
 
 ```text
-http://127.0.0.1:3000/dnsquerytool/api/query?server=8.8.8.8&name=example.com&type=A&rd=1
+http://127.0.0.1:3000/dns-query-tool/api/query?server=8.8.8.8&name=example.com&type=A&rd=1
 ```
 
 ## ファイル構成
