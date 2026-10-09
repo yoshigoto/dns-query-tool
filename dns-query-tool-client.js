@@ -10,6 +10,9 @@
     const tcpCheckbox = form.elements.namedItem('tcp');
     const httpsCheckbox = form.elements.namedItem('https');
     const dotCheckbox = form.elements.namedItem('dot');
+    const edns0Checkbox = form.elements.namedItem('edns0');
+    const dnssecCheckbox = form.elements.namedItem('dnssec');
+    const nsidCheckbox = form.elements.namedItem('nsid');
     const httpsPathInput = form.elements.namedItem('httpspath');
     const queryTypeSelect = form.elements.namedItem('type');
     const ixfrSerialInput = form.elements.namedItem('ixfrserial');
@@ -102,6 +105,11 @@
     tcpCheckbox.addEventListener('change', () => syncTransportControls(tcpCheckbox));
     httpsCheckbox.addEventListener('change', () => syncTransportControls(httpsCheckbox));
     dotCheckbox.addEventListener('change', () => syncTransportControls(dotCheckbox));
+    for (const checkbox of [dnssecCheckbox, nsidCheckbox]) {
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) edns0Checkbox.checked = true;
+        });
+    }
     queryTypeSelect.addEventListener('change', syncQueryTypeControls);
     syncTransportControls();
     syncQueryTypeControls();

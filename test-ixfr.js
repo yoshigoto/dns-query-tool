@@ -126,7 +126,7 @@ test('IXFR の入力欄は選択・URL 復元・履歴・リンクに追従す�
         addEventListener(event, callback) { this.listeners[event] = callback; },
         ...properties
     });
-    const controls = Object.fromEntries(['tcp', 'https', 'dot', 'httpspath', 'type', 'ixfrserial', 'server', 'qposi', 'name']
+    const controls = Object.fromEntries(['tcp', 'https', 'dot', 'edns0', 'dnssec', 'nsid', 'httpspath', 'type', 'ixfrserial', 'server', 'qposi', 'name']
         .map((name) => [name, control()]));
     controls.type.value = 'A';
     controls.namedItem = (name) => controls[name];
@@ -153,6 +153,14 @@ test('IXFR の入力欄は選択・URL 復元・履歴・リンクに追従す�
     assert.equal(controls.ixfrserial.required, true);
     assert.equal(controls.ixfrserial.disabled, false);
     assert.equal(elements['ixfr-serial-option'].hidden, false);
+
+    controls.dnssec.checked = true;
+    controls.dnssec.listeners.change();
+    assert.equal(controls.edns0.checked, true);
+    controls.edns0.checked = false;
+    controls.nsid.checked = true;
+    controls.nsid.listeners.change();
+    assert.equal(controls.edns0.checked, true);
 
     controls.type.value = 'A';
     controls.type.listeners.change();
