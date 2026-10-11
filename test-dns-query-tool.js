@@ -1198,6 +1198,49 @@ test('既存のオブジェクト型 RDATA の必須フィールド欠損を mal
     }
 });
 
+test('RRSIG の typeCovered に含まれる UNKNOWN RR type を既知タイプ名で表示する', () => {
+    const expectedTypes = {
+        UNKNOWN_63: 'ZONEMD',
+        UNKNOWN_64: 'SVCB',
+        UNKNOWN_65: 'HTTPS'
+    };
+
+    for (const [typeCovered, expectedType] of Object.entries(expectedTypes)) {
+        const packet = dnsPacket.encode({
+            type: 'response',
+            id: 100,
+            flags: dnsPacket.AUTHORITATIVE_ANSWER,
+            questions: [{ name: 'example.com', type: 'RRSIG' }],
+            answers: [{
+                name: 'example.com',
+                type: 'RRSIG',
+                ttl: 300,
+                data: {
+                    typeCovered,
+                    algorithm: 13,
+                    labels: 2,
+                    originalTTL: 300,
+                    expiration: 2000000000,
+                    inception: 1900000000,
+                    keyTag: 1,
+                    signersName: 'example.com',
+                    signature: Buffer.from([1, 2, 3])
+                }
+            }],
+            authorities: [],
+            additionals: []
+        });
+        const response = dnsPacket.decode(packet);
+        const html = makeHtmlFromDns(
+            response, packet.length, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8',
+            'example.com', 'RRSIG', 100, false, false, false, false, false, '', false, '1232',
+            false, '', false, 255, 'A', packet
+        );
+
+        assert.match(html, new RegExp(`typeCovered: ${expectedType},`));
+    }
+});
+
 test('rdata-opt-truncated の生パケットで OPTION-LENGTH 超過による WARNING SECTION の表示を検証する', () => {
     const rawMsg = Buffer.from('04d2840000010000000000011372646174612d6f70742d7472756e636174656407616e6f6d616c790474657374046c646e73026a7000000100010000291000000000000008000a001031323334', 'hex');
     const decoded = dnsPacket.decode(rawMsg);

@@ -438,7 +438,8 @@ const decodeResourceRecord = (type, msg) => {
         if (Number.isNaN(expiration.getTime()) || Number.isNaN(inception.getTime())) {
             return malformed('RRSIG');
         }
-        displayData = `typeCovered: ${msg.typeCovered}, algorithm: ${msg.algorithm}, labels: ${msg.labels}, originalTTL: ${msg.originalTTL}, expiration: ${expiration.toISOString()}, `;
+        const typeCovered = replaceUnknownRrTypeToKnown(msg.typeCovered);
+        displayData = `typeCovered: ${typeCovered}, algorithm: ${msg.algorithm}, labels: ${msg.labels}, originalTTL: ${msg.originalTTL}, expiration: ${expiration.toISOString()}, `;
         displayData += `inception: ${inception.toISOString()}, keyTag: ${msg.keyTag}, signersName: ${msg.signersName}, signature: ${msg.signature.toString('base64')}`;
     } else if (type === 'SOA') {
         if (!hasFields(msg, ['mname', 'rname', 'serial', 'refresh', 'retry', 'expire', 'minimum'])) {
