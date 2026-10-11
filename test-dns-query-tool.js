@@ -1128,6 +1128,25 @@ test('SPF, NSEC3PARAM, CDS, CDNSKEY の生 RDATA をデコード表示する', (
     assert.match(html, /<span class="rr-type rr-type-answer">CDNSKEY<\/span>.*?flags: 256, protocol: 3, algorithm: 13, key: AQID/s);
 });
 
+test('DNSKEY の Key Tag を flags より前に表示する', () => {
+    const html = makeHtmlFromDns({
+        id: 100,
+        flags: 0,
+        rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'DNSKEY' }],
+        answers: [
+            { name: 'example.com', type: 'DNSKEY', ttl: 300, data: { flags: 256, algorithm: 13, key: Buffer.from([1, 2, 3]) } },
+            { name: 'example.com', type: 'DNSKEY', ttl: 300, data: { flags: 256, algorithm: 1, key: Buffer.from([1, 3, 1, 2, 3, 4, 5, 6]) } }
+        ],
+        authorities: [],
+        additionals: []
+    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'DNSKEY', 100,
+    false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
+
+    assert.match(html, /keyTag: 2063, flags: 256, protocol: 3, algorithm: 13, key: AQID/);
+    assert.match(html, /keyTag: 772, flags: 256, protocol: 3, algorithm: 1, key: AQMBAgMEBQY=/);
+});
+
 test('SVCB の不正な SvcParam 長を malformed として表示する', () => {
     const invalidRdata = [
         { data: Buffer.from([0, 1, 0, 0, 1, 0, 2, 3, 97]), message: 'ALPN SvcParam' },

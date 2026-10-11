@@ -408,7 +408,39 @@ const decodeResourceRecord = (type, msg) => {
         if (!hasFields(msg, ['flags', 'algorithm', 'key']) || !Buffer.isBuffer(msg.key)) {
             return malformed('DNSKEY');
         }
-        displayData = `flags: ${msg.flags}, protocol: 3, algorithm: ${msg.algorithm}, key: ${msg.key.toString('base64')}`;
+        let keyTag;
+        if (msg.algorithm === 1) {
+            if (msg.key.length === 0) {
+                return malformed('DNSKEY');
+            }
+            let exponentLength = msg.key[0];
+            let exponentOffset = 1;
+            if (exponentLength === 0) {
+                if (msg.key.length < 3) {
+                    return malformed('DNSKEY');
+                }
+                exponentLength = msg.key.readUInt16BE(1);
+                exponentOffset = 3;
+            }
+            const modulusOffset = exponentOffset + exponentLength;
+            if (modulusOffset + 4 > msg.key.length) {
+                return malformed('DNSKEY');
+            }
+            keyTag = msg.key.readUInt16BE(msg.key.length - 4);
+        } else {
+            const rdata = Buffer.alloc(4 + msg.key.length);
+            rdata.writeUInt16BE(msg.flags, 0);
+            rdata[2] = 3;
+            rdata[3] = msg.algorithm;
+            msg.key.copy(rdata, 4);
+            let accumulator = 0;
+            for (let i = 0; i < rdata.length; i++) {
+                accumulator += i & 1 ? rdata[i] : rdata[i] << 8;
+            }
+            accumulator += accumulator >>> 16;
+            keyTag = accumulator & 0xffff;
+        }
+        displayData = `keyTag: ${keyTag}, flags: ${msg.flags}, protocol: 3, algorithm: ${msg.algorithm}, key: ${msg.key.toString('base64')}`;
     } else if (type === 'DS') {
         if (!hasFields(msg, ['keyTag', 'algorithm', 'digestType', 'digest']) || !Buffer.isBuffer(msg.digest)) {
             return malformed('DS');
