@@ -2502,7 +2502,7 @@ const server = http.createServer(async (req, res) => {
             udpClient.close();
         });
 
-        // 指定されたサーバーIPの53番ポートへ送信
+        // 指定されたサーバーIPアドレスの53番ポートへ送信
         udpClient.send(buf, 0, buf.length, 53, dnsServerAddress, (err) => {
             if (err) {
                 isResponded = true;
