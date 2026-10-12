@@ -686,7 +686,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         return classifyNsRelationship(authority.name, nameServerName);
     };
 
-    html += '<div class="result dns-response"><h3>--- DNSレスポンス解析結果 ---</h3>';
+    html += '<div class="result dns-response" style="text-autospace: normal;"><h3>--- DNSレスポンス解析結果 ---</h3>';
     html += '<h4 class="dns-section-title basic-info-title">基本情報</h4>';
     html += '<dl class="basic-info">';
     html += `<div class="basic-info-item basic-info-item-wide"><dt>対象ドメイン名</dt><dd><code>${escapeHtml(domainName)}</code></dd></div>`;
