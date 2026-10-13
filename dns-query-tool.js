@@ -1856,16 +1856,44 @@ const queryAuthoritativeServer = (serverAddress, name, type, createSocket = dgra
     });
 });
 
+// 応答しない委任先を細工したドメイン名で 1リクエストが長時間・大量の問い合わせを行わないよう、
+// DNSサーバー名の解決全体 (入れ子の解決や IPv6 へのフォールバックを含む) で時間と問い合わせ回数に上限を設ける
+const DNS_SERVER_RESOLUTION_DEADLINE_MS = 10000;
+const DNS_SERVER_RESOLUTION_MAX_QUERIES = 50;
+
+class ResolutionBudgetExceededError extends Error {}
+
+const createResolutionBudget = (deadlineMs = DNS_SERVER_RESOLUTION_DEADLINE_MS, maxQueries = DNS_SERVER_RESOLUTION_MAX_QUERIES) => ({
+    deadline: Date.now() + deadlineMs,
+    deadlineMs,
+    maxQueries,
+    remainingQueries: maxQueries
+});
+
+const queryWithinBudget = (budget, runQuery) => {
+    const message = `DNSサーバー名の解決が上限 (${budget.deadlineMs / 1000} 秒・問い合わせ ${budget.maxQueries} 回) を超えたため中止しました。`;
+    const remainingMs = budget.deadline - Date.now();
+    if (remainingMs <= 0 || budget.remainingQueries <= 0) {
+        return Promise.reject(new ResolutionBudgetExceededError(message));
+    }
+    budget.remainingQueries--;
+    let timerId;
+    const deadline = new Promise((_, reject) => {
+        timerId = setTimeout(() => reject(new ResolutionBudgetExceededError(message)), remainingMs);
+    });
+    return Promise.race([Promise.resolve().then(runQuery), deadline]).finally(() => clearTimeout(timerId));
+};
+
 const resolveDnsServerAddress = async (dnsServer, preferIpv6, resolutionDepth = 0,
-    queryServer = queryAuthoritativeServer, sendTcp = false) => {
+    queryServer = queryAuthoritativeServer, sendTcp = false, budget = createResolutionBudget()) => {
     try {
-        return await resolveDnsServerAddressByType(dnsServer, preferIpv6, resolutionDepth, queryServer, sendTcp);
+        return await resolveDnsServerAddressByType(dnsServer, preferIpv6, resolutionDepth, queryServer, sendTcp, budget);
     } catch (error) {
-        if (preferIpv6) {
+        if (preferIpv6 || error instanceof ResolutionBudgetExceededError) {
             throw error;
         }
         try {
-            return await resolveDnsServerAddressByType(dnsServer, true, resolutionDepth, queryServer, sendTcp);
+            return await resolveDnsServerAddressByType(dnsServer, true, resolutionDepth, queryServer, sendTcp, budget);
         } catch (subError) {
             throw error;
         }
@@ -1873,7 +1901,7 @@ const resolveDnsServerAddress = async (dnsServer, preferIpv6, resolutionDepth = 
 };
 
 const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDepth = 0,
-    queryServer = queryAuthoritativeServer, sendTcp = false) => {
+    queryServer = queryAuthoritativeServer, sendTcp = false, budget = createResolutionBudget()) => {
     if (net.isIP(dnsServer)) return dnsServer;
     if (resolutionDepth >= 5) {
         throw new Error('DNSサーバー名の解決で入れ子の委任が上限を超えました。');
@@ -1888,9 +1916,13 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
         let lastError;
         for (const nameServer of nameServers) {
             try {
-                response = await queryServer(nameServer, queryName, queryType, dgram.createSocket, queryAuthoritativeServerOverTcp, sendTcp);
+                response = await queryWithinBudget(budget,
+                    () => queryServer(nameServer, queryName, queryType, dgram.createSocket, queryAuthoritativeServerOverTcp, sendTcp));
                 break;
             } catch (error) {
+                if (error instanceof ResolutionBudgetExceededError) {
+                    throw error;
+                }
                 lastError = error;
                 // 同じ委任先の次の権威サーバーを試す。
             }
@@ -1935,9 +1967,12 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
             let lastSubError;
             for (const delegatedName of delegatedNames) {
                 try {
-                    resolvedNameServerAddress = await resolveDnsServerAddress(delegatedName, preferIpv6, resolutionDepth + 1, queryServer, sendTcp);
+                    resolvedNameServerAddress = await resolveDnsServerAddress(delegatedName, preferIpv6, resolutionDepth + 1, queryServer, sendTcp, budget);
                     break;
                 } catch (error) {
+                    if (error instanceof ResolutionBudgetExceededError) {
+                        throw error;
+                    }
                     lastSubError = error;
                     // 他の委任先NSの名前解決を試す。
                 }
@@ -2623,6 +2658,7 @@ if (require.main === module) {
 module.exports = {
     analyzeDnsPacketError,
     buildDnsFlags,
+    createResolutionBudget,
     getDnsTypeCode,
     isInvalidDnsServer,
     isInvalidHttpsPath,

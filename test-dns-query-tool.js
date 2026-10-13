@@ -8,6 +8,7 @@ const dnsPacket = require('dns-packet');
 const {
     analyzeDnsPacketError,
     buildDnsFlags,
+    createResolutionBudget,
     getDnsTypeCode,
     isInvalidDnsServer,
     isInvalidQueryClass,
@@ -1556,4 +1557,36 @@ test('入力値はHTMLエスケープ前の値で問い合わせに使い、出�
         assert.match(body, /&lt;IMG SRC=X&gt;|&lt;img src=x&gt;/);
         assert.doesNotMatch(body, /<img/i);
     }
+});
+
+test('DNSサーバー名の解決は問い合わせ回数の上限で打ち切る', async () => {
+    let queryCount = 0;
+    const glue = Array.from({ length: 200 }, (_, i) => ({ type: 'A', name: 'ns.slow.example', data: `203.0.114.${i % 250 + 1}` }));
+    const mockQueryServer = async (serverAddress) => {
+        queryCount++;
+        if (serverAddress === '198.41.0.4') {
+            return {
+                answers: [],
+                authorities: [{ type: 'NS', name: 'slow.example', data: 'ns.slow.example' }],
+                additionals: glue
+            };
+        }
+        throw new Error(`${serverAddress} から UDP 応答がありませんでした。`);
+    };
+
+    await assert.rejects(
+        resolveDnsServerAddress('target.slow.example', false, 0, mockQueryServer),
+        /DNSサーバー名の解決が上限 \(10 秒・問い合わせ 50 回\) を超えたため中止しました/
+    );
+    assert.equal(queryCount, 50);
+});
+
+test('DNSサーバー名の解決は全体の時間上限で打ち切る', async () => {
+    const neverRespond = () => new Promise(() => {});
+    const startedAt = Date.now();
+    await assert.rejects(
+        resolveDnsServerAddress('target.slow.example', false, 0, neverRespond, false, createResolutionBudget(100, 50)),
+        /DNSサーバー名の解決が上限 \(0\.1 秒・問い合わせ 50 回\) を超えたため中止しました/
+    );
+    assert.ok(Date.now() - startedAt < 1000);
 });
