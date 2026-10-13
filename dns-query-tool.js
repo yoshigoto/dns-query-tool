@@ -1453,17 +1453,6 @@ const compressIPv6 = (ip) => {
     return '::';
 };
 
-const isIpv6Loopback = (ip) => {
-    if (!isValidIPv6(ip)) {
-        return false;
-    }
-
-    if (compressIPv6(ip) === '::1') {
-        return true;
-    }
-    return false;
-};
-
 const isValidIPv6 = (ip) => {
     if (typeof ip !== 'string') return false;
     return net.isIP(ip.trim()) === 6;
@@ -1474,38 +1463,60 @@ const isValidIPv4 = (ip) => {
     return net.isIP(ip.trim()) === 4;
 };
 
-const isLoopbackIPv4 = (ip) => {
-    if (!isValidIPv4(ip)) return false;
-    return Number.parseInt(ip.split('.')[0], 10) === 127;
-};
+// SSRF 対策: 問い合わせ先はグローバルに到達可能なユニキャストアドレスのみ許可する (許可リスト方式)
+// IPv6 はグローバルユニキャスト (2000::/3) 以外をすべて拒否するため、::、::1、::ffff:0:0/96 (IPv4射影)、
+// ::/96 (IPv4互換)、64:ff9b::/96 (NAT64)、fc00::/7、fe80::/10、fec0::/10、ff00::/8 なども拒否される
+const GLOBAL_UNICAST_IPV6 = new net.BlockList();
+GLOBAL_UNICAST_IPV6.addSubnet('2000::', 3, 'ipv6');
 
-const isPrivateIPv4 = (ip) => {
-    if (!isValidIPv4(ip)) return false;
+const NON_PUBLIC_ADDRESSES = new net.BlockList();
+[
+    ['0.0.0.0', 8],         // "this network" (0.0.0.0 はループバックに到達する)
+    ['10.0.0.0', 8],        // プライベート
+    ['100.64.0.0', 10],     // CGNAT 共有アドレス (クラウドの内部DNSを含む)
+    ['127.0.0.0', 8],       // ループバック
+    ['169.254.0.0', 16],    // リンクローカル (クラウドのメタデータ・内部DNSを含む)
+    ['172.16.0.0', 12],     // プライベート
+    ['192.0.0.0', 24],      // IETF プロトコル割り当て
+    ['192.0.2.0', 24],      // 文書用 (TEST-NET-1)
+    ['192.88.99.0', 24],    // 6to4 リレーエニーキャスト (廃止)
+    ['192.168.0.0', 16],    // プライベート
+    ['198.18.0.0', 15],     // ベンチマーク用
+    ['198.51.100.0', 24],   // 文書用 (TEST-NET-2)
+    ['203.0.113.0', 24],    // 文書用 (TEST-NET-3)
+    ['224.0.0.0', 4],       // マルチキャスト
+    ['240.0.0.0', 4]        // 予約 (255.255.255.255 を含む)
+].forEach(([address, prefix]) => NON_PUBLIC_ADDRESSES.addSubnet(address, prefix, 'ipv4'));
+[
+    ['2001::', 23],         // IETF プロトコル割り当て (Teredo、ORCHID、ベンチマーク等)
+    ['2001:db8::', 32],     // 文書用
+    ['2002::', 16],         // 6to4 (内部の IPv4 アドレスを埋め込める)
+    ['3fff::', 20]          // 文書用 (RFC 9637)
+].forEach(([address, prefix]) => NON_PUBLIC_ADDRESSES.addSubnet(address, prefix, 'ipv6'));
 
-    const [a, b] = ip.split('.').map(Number);
-    return a === 10 ||
-        (a === 172 && b >= 16 && b <= 31) ||
-        (a === 192 && b === 168);
-};
-
-const isPrivateIPv6 = (ip) => {
-    if (!isValidIPv6(ip)) return false;
-
-    const expanded = expandIPv6(ip);
-    if (expanded.length === 0) return false;
-
-    const first = parseInt(expanded[0], 16);
-    return (first >= 0xfc00 && first <= 0xfdff) || (first >= 0xfe80 && first <= 0xfebf);
+const isPublicUnicastAddress = (ip) => {
+    if (typeof ip !== 'string') return false;
+    const value = ip.trim();
+    // ゾーンID付きアドレス (fe80::1%eth0 等) は拒否
+    if (value.includes('%')) return false;
+    const family = net.isIP(value);
+    if (family === 4) {
+        return !NON_PUBLIC_ADDRESSES.check(value, 'ipv4');
+    }
+    if (family === 6) {
+        return GLOBAL_UNICAST_IPV6.check(value, 'ipv6') && !NON_PUBLIC_ADDRESSES.check(value, 'ipv6');
+    }
+    return false;
 };
 
 const isInvalidDnsServer = (dnsServer) => {
-    const value = (dnsServer || '').trim();
-    return value === '' ||
-        value === 'localhost' ||
-        isLoopbackIPv4(value) ||
-        isPrivateIPv4(value) ||
-        isIpv6Loopback(value) ||
-        isPrivateIPv6(value);
+    const value = (typeof dnsServer === 'string' ? dnsServer : '').trim();
+    if (value === '') return true;
+    if (net.isIP(value) || value.includes('%')) {
+        return !isPublicUnicastAddress(value);
+    }
+    const hostName = value.toLowerCase().replace(/\.$/, '');
+    return hostName === 'localhost' || hostName.endsWith('.localhost');
 };
 
 const isInvalidUdpSize = (udpSize) => {
@@ -1941,15 +1952,55 @@ const resolveDnsServerAddressByType = async (dnsServer, preferIpv6, resolutionDe
 
 const APPLICATION_PATH = process.env.APPLICATION_PATH || '/dns-query-tool';
 
-const server = http.createServer(async (req, res) => {
+// DNSメッセージは TCP の長さプレフィックス (2バイト) を含めても 65537 バイトを超えない
+const MAX_DNS_MESSAGE_BYTES = 65535;
+const MAX_DNS_TCP_FRAME_BYTES = MAX_DNS_MESSAGE_BYTES + 2;
+// AXFR/IXFR は複数メッセージで返されるため上限を別に設ける
+const MAX_ZONE_TRANSFER_RESPONSE_BYTES = 4 * 1024 * 1024;
+const DNS_RESPONSE_TIMEOUT_MS = 5000;
+// 応答を少しずつ送り続ける相手に接続を占有されないよう、通信全体の上限時間を設ける
+const DNS_SESSION_DEADLINE_MS = 15000;
+
+const SECURITY_HEADERS = Object.freeze({
+    'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin'
+});
+
+const server = http.createServer((req, res) => {
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+        res.setHeader(name, value);
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8', 'Allow': 'GET, HEAD' });
+        res.end('Method Not Allowed');
+        return;
+    }
+    handleRequest(req, res).catch((error) => {
+        // 想定外の例外でプロセスが停止しないようにし、詳細はクライアントへ返さずログにのみ残す
+        console.error(`リクエスト処理中の予期しないエラー: ${String(error && error.stack || error).replace(/[\r\n]+/g, ' | ')}`);
+        if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end('<div class="result error"><p>エラー: 内部エラーが発生しました。</p></div>');
+        } else {
+            res.destroy();
+        }
+    });
+});
+
+const handleRequest = async (req, res) => {
     if (req.url === '/favicon.ico') {
         res.writeHead(204);
         res.end();
         return;
     }
 
-    // WHATWG URL API を使用、req.url は相対パスのため第2引数にダミーのベースURLを設定
-    const parsedUrl = new URL(req.url, `http://${req.headers.host}/`);
+    // WHATWG URL API を使用、req.url は相対パスのため第2引数に固定のダミーベースURLを設定
+    // (Hostヘッダーは利用者が任意に指定でき、不正な値だと例外になるため使用しない)
+    const parsedUrl = new URL(req.url, 'http://localhost/');
     if (parsedUrl.pathname === APPLICATION_PATH || parsedUrl.pathname.startsWith(`${APPLICATION_PATH}/`)) {
         parsedUrl.pathname = parsedUrl.pathname.slice(APPLICATION_PATH.length) || '/';
     }
@@ -2254,6 +2305,15 @@ const server = http.createServer(async (req, res) => {
 
     if (sendHttps) {
         let isResponded = false;
+        const respondOnce = (fragment) => {
+            if (isResponded) return false;
+            isResponded = true;
+            clearTimeout(deadlineId);
+            html += fragment;
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+            return true;
+        };
 
         // DoH (DNS over HTTPS) は IPアドレスへ直接接続しつつ、SNI/Hostヘッダーは元のサーバー名を使う (dig +https と同様)
         const requestOptions = {
@@ -2266,7 +2326,7 @@ const server = http.createServer(async (req, res) => {
                 'Accept': 'application/dns-message',
                 'Content-Length': buf.length
             },
-            timeout: 5000
+            timeout: DNS_RESPONSE_TIMEOUT_MS
         };
         if (!isValidIPv4(dnsServer) && !isValidIPv6(dnsServer)) {
             requestOptions.servername = dnsServer;
@@ -2275,19 +2335,30 @@ const server = http.createServer(async (req, res) => {
 
         const httpsReq = https.request(requestOptions, (httpsRes) => {
             const chunks = [];
-            httpsRes.on('data', (chunk) => chunks.push(chunk));
+            let receivedBytes = 0;
+            httpsRes.on('data', (chunk) => {
+                if (isResponded) return;
+                receivedBytes += chunk.length;
+                if (receivedBytes > MAX_DNS_MESSAGE_BYTES) {
+                    respondOnce(`<div class="result error"><p>エラー: DoHサーバーの応答サイズが上限 (${MAX_DNS_MESSAGE_BYTES} バイト) を超えたため、受信を打ち切りました。</p></div>`);
+                    httpsReq.destroy();
+                    return;
+                }
+                chunks.push(chunk);
+            });
+            httpsRes.on('error', () => {
+                // 中断時のエラーは httpsReq 側または respondOnce で処理済み
+            });
             httpsRes.on('end', () => {
                 if (isResponded) {
                     return;
                 }
-                isResponded = true;
                 if (httpsRes.statusCode !== 200) {
-                    html += `<div class="result error"><p>エラー: DoHサーバーからエラー応答が返されました (HTTP ${httpsRes.statusCode})。</p></div>`;
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(html);
+                    respondOnce(`<div class="result error"><p>エラー: DoHサーバーからエラー応答が返されました (HTTP ${escapeHtml(String(httpsRes.statusCode))})。</p></div>`);
                     return;
                 }
                 const msg = Buffer.concat(chunks);
+                let resultHtml = '';
                 try {
                     const response = dnsPacket.decode(msg);
                     const anomalyHtml = analyzeDnsPacketError(msg);
@@ -2296,34 +2367,29 @@ const server = http.createServer(async (req, res) => {
                         throw new Error('ヘッダーのセクション件数と実際のリソースレコード数が一致しません');
                     }
                     const bytesRead = dnsPacket.decode.bytes;
-                    html += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
+                    resultHtml = makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
                         sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, msg, qClass, sendDot, ixfrSerial);
                 } catch (err) {
-                    html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
+                    resultHtml = `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(msg, err)}</div>`;
                 } finally {
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(html);
+                    respondOnce(resultHtml);
                 }
             });
         });
 
+        const timeoutHtml = `<div class="result error"><p>タイムアウト: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答がありませんでした。</p></div>`;
+        const deadlineId = setTimeout(() => {
+            respondOnce(timeoutHtml);
+            httpsReq.destroy();
+        }, DNS_SESSION_DEADLINE_MS);
+
         httpsReq.on('timeout', () => {
-            if (!isResponded) {
-                isResponded = true;
-                html += `<div class="result error"><p>タイムアウト: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答がありませんでした。</p></div>`;
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                res.end(html);
-            }
+            respondOnce(timeoutHtml);
             httpsReq.destroy();
         });
 
         httpsReq.on('error', (err) => {
-            if (!isResponded) {
-                isResponded = true;
-                html += `<div class="result error"><p>エラー: HTTPS通信に失敗しました: ${escapeHtml(err.message)}</p></div>`;
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                res.end(html);
-            }
+            respondOnce(`<div class="result error"><p>エラー: HTTPS通信に失敗しました: ${escapeHtml(err.message)}</p></div>`);
         });
 
         httpsReq.write(buf);
@@ -2350,97 +2416,109 @@ const server = http.createServer(async (req, res) => {
             res.end(html);
         });
     } else if (sendTcp) {
+        const isZoneTransfer = qType === 'AXFR' || qType === 'IXFR';
+        const maxResponseBytes = isZoneTransfer ? MAX_ZONE_TRANSFER_RESPONSE_BYTES : MAX_DNS_TCP_FRAME_BYTES;
         let resultHtml = '';
-        let expectedLength = 0
-        let receivedBuffer = null
-        let isResponded = false;
+        let receivedBuffer = Buffer.alloc(0);
+        let totalReceivedBytes = 0;
+        let receivedFrameCount = 0;
         let finished = false;
-        var tcpClient;
 
         // TCPソケットを作成して送信
-        if (isValidIPv6(dnsServerAddress)) {
-            tcpClient = new net.Socket({ family: 6 });
-        } else {
-            tcpClient = new net.Socket({ family: 4 });
-        }
+        const tcpClient = new net.Socket({ family: isValidIPv6(dnsServerAddress) ? 6 : 4 });
+
+        const finish = (extraHtml = '') => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeoutId);
+            clearTimeout(deadlineId);
+            tcpClient.destroy();
+            html += resultHtml + extraHtml;
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+        };
 
         // タイムアウト処理 (5秒間応答がない場合は通信を打ち切る)
         const timeoutId = setTimeout(() => {
-            if (!isResponded) {
-                isResponded = true;
-                html += `<div class="result error"><p>タイムアウト: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答がありませんでした。</p>`;
-                if (qnameMinimisation) {
-                    const resetQMiniHtml = addLinkToDisplayData(parsedUrl.origin, parsedUrl.pathname, 'a.root-servers.net', domainName, queryType, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, '255', qnameType, 'こちら', qClass, sendDot, '', ixfrSerial);
-                    html += `<p>※問い合わせたのは <strong>${escapeHtml(qName)}</strong> でした。${resetQMiniHtml} で QNAME minimisation の状態をリセットしてみてください。</p>`;
-                }
-                html += `</div>`;
-                finished = true;
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                res.end(html);
-                tcpClient.destroy();
+            let timeoutHtml = `<div class="result error"><p>タイムアウト: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答がありませんでした。</p>`;
+            if (qnameMinimisation) {
+                const resetQMiniHtml = addLinkToDisplayData(parsedUrl.origin, parsedUrl.pathname, 'a.root-servers.net', domainName, queryType, recursionDesired, checkingDisabled,
+                    sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, '255', qnameType, 'こちら', qClass, sendDot, '', ixfrSerial);
+                timeoutHtml += `<p>※問い合わせたのは <strong>${escapeHtml(qName)}</strong> でした。${resetQMiniHtml} で QNAME minimisation の状態をリセットしてみてください。</p>`;
             }
-        }, 5000);
+            timeoutHtml += `</div>`;
+            finish(timeoutHtml);
+        }, DNS_RESPONSE_TIMEOUT_MS);
+
+        // 応答を受信し始めた後も、通信全体の上限時間を超えたら打ち切る
+        const deadlineId = setTimeout(() => {
+            finish(`<div class="result error"><p>エラー: 通信時間が上限 (${DNS_SESSION_DEADLINE_MS / 1000} 秒) を超えたため、受信を打ち切りました。</p></div>`);
+        }, DNS_SESSION_DEADLINE_MS);
 
         tcpClient.connect(53, dnsServerAddress, () => {
             tcpClient.write(buf);
         });
 
         tcpClient.on('data', data => {
+            if (finished) return;
             // TCPの場合、アプリケーションへはいくつかの区切りで転送される (イベントが発生する) ので、受信バッファー (receivedBuffer) は外に確保しておく
-            if (receivedBuffer == null) {
-                if (data.byteLength > 1) {
-                    const plen = data.readUInt16BE(0);
-                    expectedLength = plen + 2;	// TCPペイロードの中の DNSメッセージの先頭 2バイトに DNSメッセージのサイズが格納されているので、その分を足す
-                    receivedBuffer = Buffer.from(data);
-                }
-            } else {
-                receivedBuffer = Buffer.concat([receivedBuffer, data]);
-            }
+            totalReceivedBytes += data.byteLength;
+            receivedBuffer = Buffer.concat([receivedBuffer, data]);
 
-            if (receivedBuffer.byteLength >= expectedLength) {
-                isResponded = true;
+            // DNSメッセージの先頭 2バイトに DNSメッセージのサイズが格納されているので、揃ったフレームから 1つずつ処理する
+            while (!finished && receivedBuffer.byteLength >= 2) {
+                const frameLength = receivedBuffer.readUInt16BE(0) + 2;
+                if (receivedBuffer.byteLength < frameLength) {
+                    break;
+                }
+                const frame = receivedBuffer.subarray(0, frameLength);
+                receivedBuffer = receivedBuffer.subarray(frameLength);
+                receivedFrameCount++;
                 clearTimeout(timeoutId);
                 try {
-                    const response = dnsPacket.streamDecode(receivedBuffer);
-                    const anomalyHtml = analyzeDnsPacketError(receivedBuffer, null, true);
+                    const response = dnsPacket.streamDecode(frame);
+                    const anomalyHtml = analyzeDnsPacketError(frame, null, true);
                     const hasResidualBytesWarning = /未消費データ|extra bytes|残っています/i.test(anomalyHtml || '');
                     if (anomalyHtml && !hasResidualBytesWarning) {
                         throw new Error('ヘッダーのセクション件数と実際のリソースレコード数が一致しません');
                     }
                     const bytesRead = dnsPacket.streamDecode.bytes;
                     resultHtml += makeHtmlFromDns(response, bytesRead, parsedUrl.origin, parsedUrl.pathname, dnsServer, dnsServerAddress, domainName, queryType, qId, recursionDesired, checkingDisabled,
-                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, receivedBuffer, qClass, sendDot, ixfrSerial);
+                        sendTcp, sendIpv6, sendHttps, httpsPath, edns0Enable, dnssecOk, udpSize, nsidEnable, mQType, qnameMinimisation, qnamePosition, qnameType, frame, qClass, sendDot, ixfrSerial);
                 } catch (err) {
-                    html += `<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(receivedBuffer, err, true)}</div>`;
-                } finally {
-                    tcpClient.end();	// AWS (Route 53) は、TCPリソース解放をすぐに行う目的で DNSデータの送信後に RSTを送ってくるので、end() では read ECONNRESET が発生してしまうが、あえてこのようにしている
+                    finish(`<div class="result error"><p>エラー: メッセージの解析に失敗しました: ${escapeHtml(err.message)}</p>${analyzeDnsPacketError(frame, err, true)}</div>`);
+                    return;
                 }
+                if (!isZoneTransfer) {
+                    finish();
+                    return;
+                }
+                if (receivedFrameCount === 1) {
+                    // AXFR/IXFR は複数メッセージが続くため、送信側のみ閉じてサーバーが接続を閉じるまで受信を続ける
+                    tcpClient.end();
+                }
+            }
+
+            if (!finished && totalReceivedBytes > maxResponseBytes) {
+                finish(`<div class="result error"><p>エラー: 応答サイズが上限 (${maxResponseBytes} バイト) を超えたため、受信を打ち切りました。</p></div>`);
             }
         });
 
         tcpClient.on('error', (err) => {
-            clearTimeout(timeoutId);
-            if (!isResponded) {
-                isResponded = true;
-                html += `<div class="result error"><p>エラー: TCP通信に失敗しました: ${escapeHtml(err.message)}</p></div>`;
+            // AWS (Route 53) は DNSデータの送信後に RST を送ってくるため、受信済みの応答があれば結果を表示する
+            if (receivedFrameCount === 0) {
+                finish(`<div class="result error"><p>エラー: TCP通信に失敗しました: ${escapeHtml(err.message)}</p></div>`);
+            } else {
+                finish();
             }
-            // このイベントの直後に、'close'イベントが呼び出される
         });
 
-        tcpClient.on('close', (hadError) => {
-            clearTimeout(timeoutId);
-            if (finished) {
-                return;
+        tcpClient.on('close', () => {
+            if (receivedFrameCount === 0) {
+                finish(`<div class="result error"><p>エラー: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答を受信する前に TCP 接続が切断されました。</p></div>`);
+            } else {
+                finish();
             }
-            finished = true;
-            if (!isResponded && resultHtml === '') {
-                html += `<div class="result error"><p>エラー: サーバー <strong>${escapeHtml(dnsServer)}</strong> から応答を受信する前に TCP 接続が切断されました。</p></div>`;
-            } else if (!hadError || resultHtml !== '') {
-                html += resultHtml;
-            }
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(html);
         });
     } else {
         let isResponded = false;
@@ -2468,9 +2546,16 @@ const server = http.createServer(async (req, res) => {
                 res.end(html);
                 udpClient.close();
             }
-        }, 5000);
+        }, DNS_RESPONSE_TIMEOUT_MS);
 
-        udpClient.on('message', (msg) => {
+        // 問い合わせ先以外のアドレスから届いたデータグラム (なりすまし応答) は無視する
+        const udpServerFamily = isValidIPv6(dnsServerAddress) ? 'ipv6' : 'ipv4';
+        const expectedUdpSource = new net.BlockList();
+        expectedUdpSource.addAddress(dnsServerAddress, udpServerFamily);
+
+        udpClient.on('message', (msg, rinfo) => {
+            if (isResponded) return;
+            if (rinfo && !expectedUdpSource.check(rinfo.address, udpServerFamily)) return;
             isResponded = true;
             clearTimeout(timeoutId);
 
@@ -2494,6 +2579,7 @@ const server = http.createServer(async (req, res) => {
         });
 
         udpClient.on('error', (err) => {
+            if (isResponded) return;
             isResponded = true;
             clearTimeout(timeoutId);
             html += `<div class="result error"><p>エラー: UDP通信に失敗しました: ${escapeHtml(err.message)}</p></div>`;
@@ -2504,7 +2590,7 @@ const server = http.createServer(async (req, res) => {
 
         // 指定されたサーバーIPアドレスの53番ポートへ送信
         udpClient.send(buf, 0, buf.length, 53, dnsServerAddress, (err) => {
-            if (err) {
+            if (err && !isResponded) {
                 isResponded = true;
                 clearTimeout(timeoutId);
                 html += `<div class="result error"><p>エラー: 送信に失敗しました: ${escapeHtml(err.message)}</p></div>`;
@@ -2514,7 +2600,7 @@ const server = http.createServer(async (req, res) => {
             }
         });
     }
-});
+};
 
 const HOST = '127.0.0.1';
 const PORT = 3000;

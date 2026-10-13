@@ -76,7 +76,12 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             results.innerHTML = await response.text();
         } catch (error) {
-            results.innerHTML = `<div class="result error"><p>エラー: リクエストに失敗しました: ${error.message}</p></div>`;
+            const errorBox = document.createElement('div');
+            errorBox.className = 'result error';
+            const errorText = document.createElement('p');
+            errorText.textContent = `エラー: リクエストに失敗しました: ${error.message}`;
+            errorBox.append(errorText);
+            results.replaceChildren(errorBox);
         }
     };
 

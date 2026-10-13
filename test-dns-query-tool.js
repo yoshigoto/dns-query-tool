@@ -1282,8 +1282,8 @@ test('DNSサーバー解決時に権威サーバー問い合わせでタイム�
                 answers: [],
                 authorities: [{ type: 'NS', name: 'drop.anomaly.test.ldns.jp', data: 'ns.drop.anomaly.test.ldns.jp' }],
                 additionals: [
-                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '192.0.2.53' },
-                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:db8::53' }
+                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '203.0.114.53' },
+                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:4860:ffff::53' }
                 ]
             };
         }
@@ -1303,8 +1303,8 @@ test('DNSサーバー解決時にTCP指定の場合も権威サーバー問い�
                 answers: [],
                 authorities: [{ type: 'NS', name: 'drop.anomaly.test.ldns.jp', data: 'ns.drop.anomaly.test.ldns.jp' }],
                 additionals: [
-                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '192.0.2.53' },
-                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:db8::53' }
+                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '203.0.114.53' },
+                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:4860:ffff::53' }
                 ]
             };
         }
@@ -1324,8 +1324,8 @@ test('DNSサーバー解決時にTCP指定で接続切断が発生した場合�
                 answers: [],
                 authorities: [{ type: 'NS', name: 'drop.anomaly.test.ldns.jp', data: 'ns.drop.anomaly.test.ldns.jp' }],
                 additionals: [
-                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '192.0.2.53' },
-                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:db8::53' }
+                    { type: 'A', name: 'ns.drop.anomaly.test.ldns.jp', data: '203.0.114.53' },
+                    { type: 'AAAA', name: 'ns.drop.anomaly.test.ldns.jp', data: '2001:4860:ffff::53' }
                 ]
             };
         }
@@ -1336,4 +1336,171 @@ test('DNSサーバー解決時にTCP指定で接続切断が発生した場合�
         async () => resolveDnsServerAddress('drop.anomaly.test.ldns.jp', false, 0, mockQueryServer, true),
         /TCP 接続が切断されました/
     );
+});
+test('SSRF対策: 非公開・特殊用途アドレスへの問い合わせを拒否する', () => {
+    const blocked = [
+        '0.0.0.0', '0.1.2.3', '::', '::ffff:127.0.0.1', '::ffff:7f00:1', '::127.0.0.1', '64:ff9b::7f00:1',
+        '169.254.169.254', '169.254.169.253', '100.64.0.1', '100.100.100.200', '198.18.0.1', '192.0.0.1',
+        '192.0.2.1', '224.0.0.251', '255.255.255.255', '172.31.255.255', '10.0.0.1',
+        'fc00::1', 'fd00:ec2::254', 'fe80::1', 'fe80::1%eth0', 'fec0::1', 'ff02::1', '2001:db8::1', '2002:7f00:1::1',
+        'LOCALHOST', 'localhost.', 'foo.localhost', ''
+    ];
+    for (const address of blocked) {
+        assert.equal(isInvalidDnsServer(address), true, address);
+    }
+    const allowed = ['8.8.8.8', '1.1.1.1', '198.41.0.4', '2001:4860:4860::8888', '2001:500:2f::f', 'a.root-servers.net', 'dns.google'];
+    for (const address of allowed) {
+        assert.equal(isInvalidDnsServer(address), false, address);
+    }
+});
+
+const listenServerForTest = async (testContext) => {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    testContext.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+    return server.address().port;
+};
+
+// 公開アドレス宛ての53番ポートへの TCP 接続を、ローカルの模擬DNSサーバーへ転送する
+const redirectTcpPort53 = (testContext, localPort) => {
+    const net = require('node:net');
+    const originalConnect = net.Socket.prototype.connect;
+    net.Socket.prototype.connect = function (...args) {
+        if (args[0] === 53 && typeof args[1] === 'string') {
+            return originalConnect.call(this, localPort, '127.0.0.1', ...args.slice(2));
+        }
+        return originalConnect.apply(this, args);
+    };
+    testContext.after(() => { net.Socket.prototype.connect = originalConnect; });
+};
+
+const startMockTcpDnsServer = async (testContext, onConnection) => {
+    const net = require('node:net');
+    const sockets = new Set();
+    // クライアントが送信側を閉じた (half-close) 後も、悪意あるサーバーとしてデータを送り続けられるようにする
+    const mockServer = net.createServer({ allowHalfOpen: true }, (socket) => {
+        sockets.add(socket);
+        socket.on('close', () => sockets.delete(socket));
+        socket.on('error', () => {});
+        onConnection(socket);
+    });
+    await new Promise((resolve) => mockServer.listen(0, '127.0.0.1', resolve));
+    testContext.after(() => new Promise((resolve) => {
+        for (const socket of sockets) socket.destroy();
+        mockServer.close(() => resolve());
+    }));
+    return mockServer.address().port;
+};
+
+test('HTTP応答にセキュリティヘッダーを付与し、不正なHostヘッダーやGET以外のメソッドで停止しない', async (testContext) => {
+    const port = await listenServerForTest(testContext);
+    const net = require('node:net');
+
+    const staticFile = await new Promise((resolve, reject) => {
+        http.get({ host: '127.0.0.1', port, path: '/dns-query-tool/' }, (response) => {
+            response.resume();
+            response.on('end', () => resolve(response));
+        }).on('error', reject);
+    });
+    assert.match(staticFile.headers['content-security-policy'], /frame-ancestors 'none'/);
+    assert.match(staticFile.headers['content-security-policy'], /script-src 'self'/);
+    assert.equal(staticFile.headers['x-content-type-options'], 'nosniff');
+    assert.equal(staticFile.headers['x-frame-options'], 'DENY');
+
+    const rawResponse = await new Promise((resolve, reject) => {
+        const socket = net.connect(port, '127.0.0.1', () => {
+            socket.write('GET /dns-query-tool/api/query?name=example.com&server=127.0.0.1 HTTP/1.1\r\nHost: [\r\nConnection: close\r\n\r\n');
+        });
+        let body = '';
+        socket.setEncoding('utf8');
+        socket.on('data', (chunk) => { body += chunk; });
+        socket.on('end', () => resolve(body));
+        socket.on('error', reject);
+    });
+    assert.match(rawResponse, /DNSサーバーを選択し直してください/);
+
+    const postResponse = await new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port, path: '/dns-query-tool/api/query', method: 'POST' }, (response) => {
+            response.resume();
+            response.on('end', () => resolve(response));
+        });
+        req.on('error', reject);
+        req.end();
+    });
+    assert.equal(postResponse.statusCode, 405);
+    assert.equal(server.listening, true);
+});
+
+test('TCP応答が1バイトだけで切断されてもプロセスを停止させない', async (testContext) => {
+    const mockPort = await startMockTcpDnsServer(testContext, (socket) => {
+        socket.once('data', () => socket.end(Buffer.from([0x00])));
+    });
+    redirectTcpPort53(testContext, mockPort);
+    const port = await listenServerForTest(testContext);
+
+    const response = await request(port, '/dns-query-tool/api/query?name=example.com&server=8.8.8.8&tcp=1');
+    assert.equal(response.statusCode, 200);
+    assert.match(response.body, /応答を受信する前に TCP 接続が切断されました/);
+});
+
+test('TCP応答は1メッセージ受信後に直ちに返し、接続を保持し続ける相手を待たない', async (testContext) => {
+    const mockPort = await startMockTcpDnsServer(testContext, (socket) => {
+        let buffer = Buffer.alloc(0);
+        socket.on('data', (data) => {
+            buffer = Buffer.concat([buffer, data]);
+            if (buffer.length < 2 || buffer.length < buffer.readUInt16BE(0) + 2) return;
+            const query = dnsPacket.streamDecode(buffer);
+            socket.write(dnsPacket.streamEncode({
+                type: 'response', id: query.id, flags: 0, questions: query.questions,
+                answers: [{ type: 'A', name: 'example.com', class: 'IN', ttl: 60, data: '93.184.216.34' }]
+            }));
+            // 応答後も接続を閉じず、追加データを送り続ける
+            socket.write(Buffer.alloc(1024));
+        });
+    });
+    redirectTcpPort53(testContext, mockPort);
+    const port = await listenServerForTest(testContext);
+
+    const startedAt = Date.now();
+    const response = await request(port, '/dns-query-tool/api/query?name=example.com&server=8.8.8.8&tcp=1');
+    assert.ok(Date.now() - startedAt < 3000);
+    assert.match(response.body, /93\.184\.216\.34/);
+    assert.equal(response.body.match(/93\.184\.216\.34/g).length >= 1, true);
+});
+
+test('AXFR応答の各メッセージは1回ずつ表示し、上限サイズを超えたら受信を打ち切る', async (testContext) => {
+    let mode = 'normal';
+    const mockPort = await startMockTcpDnsServer(testContext, (socket) => {
+        let buffer = Buffer.alloc(0);
+        socket.on('data', (data) => {
+            buffer = Buffer.concat([buffer, data]);
+            if (buffer.length < 2 || buffer.length < buffer.readUInt16BE(0) + 2) return;
+            const query = dnsPacket.streamDecode(buffer);
+            const soa = { type: 'SOA', name: 'example.com', class: 'IN', ttl: 60, data: { mname: 'ns.example.com', rname: 'admin.example.com', serial: 1, refresh: 1, retry: 1, expire: 1, minimum: 1 } };
+            const message = (answers) => dnsPacket.streamEncode({ type: 'response', id: query.id, flags: 0, questions: query.questions, answers });
+            if (mode === 'normal') {
+                socket.write(Buffer.concat([
+                    message([soa, { type: 'A', name: 'first.example.com', class: 'IN', ttl: 60, data: '203.0.114.1' }]),
+                    message([{ type: 'A', name: 'second.example.com', class: 'IN', ttl: 60, data: '203.0.114.2' }, soa])
+                ]));
+                socket.end();
+                return;
+            }
+            const filler = message([soa, { type: 'TXT', name: 'big.example.com', class: 'IN', ttl: 60, data: Array.from({ length: 230 }, () => 'x'.repeat(250)) }]);
+            const sendForever = () => {
+                if (socket.destroyed) return;
+                if (socket.write(filler)) setImmediate(sendForever); else socket.once('drain', sendForever);
+            };
+            sendForever();
+        });
+    });
+    redirectTcpPort53(testContext, mockPort);
+    const port = await listenServerForTest(testContext);
+
+    const response = await request(port, '/dns-query-tool/api/query?name=example.com&server=8.8.8.8&tcp=1&type=AXFR');
+    assert.equal(response.body.match(/first\.example\.com/g).length, 1);
+    assert.equal(response.body.match(/second\.example\.com/g).length, 1);
+
+    mode = 'flood';
+    const flooded = await request(port, '/dns-query-tool/api/query?name=example.com&server=8.8.8.8&tcp=1&type=AXFR');
+    assert.match(flooded.body, /応答サイズが上限 \(4194304 バイト\) を超えたため、受信を打ち切りました/);
 });
