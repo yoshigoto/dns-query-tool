@@ -1509,11 +1509,17 @@ const isPublicUnicastAddress = (ip) => {
     return false;
 };
 
+const DNS_SERVER_HOSTNAME_PATTERN = /^(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.)*[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.?$/;
+
 const isInvalidDnsServer = (dnsServer) => {
     const value = (typeof dnsServer === 'string' ? dnsServer : '').trim();
     if (value === '') return true;
     if (net.isIP(value) || value.includes('%')) {
         return !isPublicUnicastAddress(value);
+    }
+    // ホスト名は英数字・ハイフン・アンダースコアのラベルのみ許可する (SNI/Hostヘッダーにも使用するため)
+    if (!DNS_SERVER_HOSTNAME_PATTERN.test(value) || value.replace(/\.$/, '').length > 253) {
+        return true;
     }
     const hostName = value.toLowerCase().replace(/\.$/, '');
     return hostName === 'localhost' || hostName.endsWith('.localhost');
@@ -2051,16 +2057,16 @@ const handleRequest = async (req, res) => {
     const sendDot = params.get('dot') === '1';
     const rawHttpsPath = params.get('httpspath') || '/dns-query';
 
-    // 画面表示用にすべての入力値をエスケープ (サニタイズ)
-    const dnsServer = escapeHtml(rawDnsServer.trim());
-    let domainName = escapeHtml(rawDomainName.trim().replace(/\\/g, ''));
-    let queryType = escapeHtml(rawQueryType);
-    const queryClass = escapeHtml(rawQueryClass.trim().toUpperCase());
-    let qnamePosition = escapeHtml(rawQnamePosition.trim());
-    const qnameType = escapeHtml(rawQnameType) === 'NS' ? 'NS' : 'A';
-    const udpSize = escapeHtml(rawUdpSize.trim());
-    const mQType = escapeHtml(rawMQtype.trim());
-    const httpsPath = escapeHtml(rawHttpsPath.trim()) || '/dns-query';
+    // 入力値は生の値のまま検証・DNS問い合わせに使い、HTMLへ出力する箇所で escapeHtml() する
+    const dnsServer = rawDnsServer.trim();
+    let domainName = rawDomainName.trim().replace(/\\/g, '');
+    let queryType = rawQueryType;
+    const queryClass = rawQueryClass.trim().toUpperCase();
+    let qnamePosition = rawQnamePosition.trim();
+    const qnameType = rawQnameType === 'NS' ? 'NS' : 'A';
+    const udpSize = rawUdpSize.trim();
+    const mQType = rawMQtype.trim();
+    const httpsPath = rawHttpsPath.trim() || '/dns-query';
     let html = '';
 
     if (!domainName || !dnsServer) {
@@ -2080,14 +2086,14 @@ const handleRequest = async (req, res) => {
 
     // クエリータイプのホワイトリストチェック
     if (isInvalidQueryType(queryType)) {
-        html += `<div class="result error"><p>エラー: 不正なクエリータイプです (${queryType} は不正です)。</p></div>`;
+        html += `<div class="result error"><p>エラー: 不正なクエリータイプです (${escapeHtml(queryType)} は不正です)。</p></div>`;
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
         return;
     }
 
     if (isInvalidQueryClass(queryClass)) {
-        html += `<div class="result error"><p>エラー: 不正なクエリークラスです (${queryClass} は不正です)。</p></div>`;
+        html += `<div class="result error"><p>エラー: 不正なクエリークラスです (${escapeHtml(queryClass)} は不正です)。</p></div>`;
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
         return;
@@ -2124,7 +2130,7 @@ const handleRequest = async (req, res) => {
 
     // UDP Payload Sizeのチェック
     if (isInvalidUdpSize(udpSize)) {
-        html += `<div class="result error"><p>エラー: UDPメッセージサイズを入力し直してください (${udpSize} は不正です)。</p></div>`;
+        html += `<div class="result error"><p>エラー: UDPメッセージサイズを入力し直してください (${escapeHtml(udpSize)} は不正です)。</p></div>`;
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
         return;

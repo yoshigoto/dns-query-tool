@@ -1504,3 +1504,56 @@ test('AXFR応答の各メッセージは1回ずつ表示し、上限サイズを
     const flooded = await request(port, '/dns-query-tool/api/query?name=example.com&server=8.8.8.8&tcp=1&type=AXFR');
     assert.match(flooded.body, /応答サイズが上限 \(4194304 バイト\) を超えたため、受信を打ち切りました/);
 });
+
+test('DNSサーバー名はホスト名として不正な文字を含む場合に拒否する', () => {
+    for (const value of ['<script>.example', 'a b.example', 'evil.example\r\nX-Injected: 1', 'a&b.example', '-bad.example', 'a..example', '.']) {
+        assert.equal(isInvalidDnsServer(value), true, JSON.stringify(value));
+    }
+    for (const value of ['dns.google', 'dns.google.', '_dns.resolver.arpa', 'a-1.example']) {
+        assert.equal(isInvalidDnsServer(value), false, value);
+    }
+});
+
+test('入力値はHTMLエスケープ前の値で問い合わせに使い、出力時に1回だけエスケープする', async (testContext) => {
+    const https = require('node:https');
+    const originalRequest = https.request;
+    const requestedPaths = [];
+    https.request = (options, callback) => {
+        requestedPaths.push(options.path);
+        const request = new EventEmitter();
+        let body = Buffer.alloc(0);
+        request.write = (chunk) => { body = Buffer.concat([body, chunk]); };
+        request.end = () => {
+            const query = dnsPacket.decode(body);
+            const response = new EventEmitter();
+            response.statusCode = 200;
+            callback(response);
+            response.emit('data', dnsPacket.encode({
+                type: 'response', id: query.id, flags: 0, questions: query.questions,
+                answers: [{ type: 'A', name: query.questions[0].name, class: 'IN', ttl: 60, data: '93.184.216.34' }]
+            }));
+            response.emit('end');
+        };
+        request.destroy = () => {};
+        return request;
+    };
+    testContext.after(() => { https.request = originalRequest; });
+    const port = await listenServerForTest(testContext);
+
+    const query = new URLSearchParams({ name: 'a&b.example', server: '8.8.8.8', https: '1', httpspath: '/dns-query?x=1&y=2' });
+    const response = await request(port, `/dns-query-tool/api/query?${query}`);
+    assert.deepEqual(requestedPaths, ['/dns-query?x=1&y=2']);
+    assert.match(response.body, /<code>a&amp;b\.example<\/code>/);
+    assert.doesNotMatch(response.body, /&amp;amp;/);
+    assert.match(response.body, /httpspath=%2Fdns-query%3Fx%3D1%26y%3D2/);
+
+    const [invalidClass, invalidUdpSize, invalidServer] = await Promise.all([
+        request(port, '/dns-query-tool/api/query?name=example.com&class=%3Cimg%20src%3Dx%3E'),
+        request(port, '/dns-query-tool/api/query?name=example.com&udpsize=%3Cimg%20src%3Dx%3E'),
+        request(port, '/dns-query-tool/api/query?name=example.com&server=%3Cimg%20src%3Dx%3E')
+    ]);
+    for (const { body } of [invalidClass, invalidUdpSize, invalidServer]) {
+        assert.match(body, /&lt;IMG SRC=X&gt;|&lt;img src=x&gt;/);
+        assert.doesNotMatch(body, /<img/i);
+    }
+});
