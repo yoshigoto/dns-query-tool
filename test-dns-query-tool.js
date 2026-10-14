@@ -1070,6 +1070,71 @@ test('RFC 2308 ネガティブキャッシュ (Negative Caching) の TTL 算出�
     assert.match(html, /ネガティブキャッシュ有効期間 \(TTL\) は <code>60秒<\/code>/);
 });
 
+test('全セクションの SOA mname リンクはルートから A レコードを新たに探索する', () => {
+    const sections = ['answers', 'authorities', 'additionals'];
+    for (const options of [
+        { qmini: false, tcp: false, https: false, dot: false, name: 'ns.example.com.' },
+        { qmini: true, tcp: true, https: false, dot: false, name: 'ns.example.com' },
+        { qmini: true, tcp: false, https: true, dot: false, name: 'ns.example.com' },
+        { qmini: false, tcp: false, https: false, dot: true, name: '.' }
+    ]) {
+        const soa = {
+            name: 'example.com', type: 'SOA', class: 'IN', ttl: 300,
+            data: {
+                mname: options.name, rname: 'admin.example.com', serial: 42,
+                refresh: 3600, retry: 600, expire: 86400, minimum: 60
+            }
+        };
+        const html = makeHtmlFromDns({
+            id: 100, type: 'response', flags: 0, rcode: 'NOERROR',
+            questions: [{ name: 'example.com', type: 'IXFR' }],
+            ...Object.fromEntries(sections.map(section => [section, [soa]]))
+        }, 20, 'http://localhost:3000', '/api/query', 'dns.google', '8.8.8.8', 'example.com', 'IXFR', 100,
+        true, true, options.tcp, true, options.https, '/dns-query', true, true, '1232', true, 'AAAA,MX',
+        options.qmini, 1, 'NS', null, 'IN', options.dot, 42);
+
+        const links = [...html.matchAll(/mname: <a data-dns-query-link href="([^"]+)">([^<]+)<\/a>([^<]+)/g)];
+        assert.equal(links.length, sections.length);
+        for (const [, href, label, rest] of links) {
+            const url = new URL(href.replaceAll('&amp;', '&'), 'http://localhost:3000/dns-query-tool/');
+            assert.equal(url.pathname, '/dns-query-tool/api/query');
+            assert.equal(label, options.name);
+            assert.equal(rest, ', rname: admin.example.com, serial: 42, refresh: 3600, retry: 600, expire: 86400, minimum: 60');
+            assert.deepEqual(Object.fromEntries(url.searchParams), {
+                server: 'a.root-servers.net', name: options.name, type: 'A', class: 'IN',
+                rd: '0', cd: '1', tcp: options.tcp ? '1' : '0', ipv6: '1',
+                https: '0', dot: '0', httpspath: '', edns0: '1', dnssec: '1',
+                udpsize: '1232', nsid: '1', mqtype: '',
+                qmini: options.qmini ? '1' : '0', qposi: '255', qtype: 'NS'
+            });
+        }
+    }
+});
+
+test('SOA のリンク名とその他のフィールドを HTML エスケープする', () => {
+    const mname = 'ns.<example>&".com';
+    const html = makeHtmlFromDns({
+        id: 100, type: 'response', flags: 0, rcode: 'NOERROR',
+        questions: [{ name: 'example.com', type: 'SOA' }],
+        answers: [{
+            name: 'example.com', type: 'SOA', ttl: 300,
+            data: {
+                mname, rname: '<admin>&".example.com', serial: 42,
+                refresh: 3600, retry: 600, expire: 86400, minimum: 60
+            }
+        }],
+        authorities: [], additionals: []
+    }, 20, 'http://localhost:3000', '/', '8.8.8.8', '8.8.8.8', 'example.com', 'SOA', 100,
+    false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A');
+
+    assert.match(html, />ns\.&lt;example&gt;&amp;&quot;\.com<\/a>, rname: &lt;admin&gt;&amp;&quot;\.example\.com, serial: 42/);
+    const link = /mname: <a data-dns-query-link href="([^"]+)"/.exec(html);
+    assert.ok(link);
+    const url = new URL(link[1].replaceAll('&amp;', '&'), 'http://localhost:3000/');
+    assert.equal(url.searchParams.get('name'), mname);
+    assert.doesNotMatch(html, /<example>|<admin>/);
+});
+
 test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証する', () => {
     const html = makeHtmlFromDns({
         id: 100,

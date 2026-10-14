@@ -341,7 +341,7 @@ const replaceUnknownRrTypeList = (rrtypes) => {
     });
 };
 
-const decodeResourceRecord = (type, msg) => {
+const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
     let displayData = '';
     const malformed = (recordType) => escapeHtml(`malformed ${recordType} RDATA`);
     const hasFields = (value, fields) => value && typeof value === 'object' && !Buffer.isBuffer(value) &&
@@ -477,7 +477,8 @@ const decodeResourceRecord = (type, msg) => {
         if (!hasFields(msg, ['mname', 'rname', 'serial', 'refresh', 'retry', 'expire', 'minimum'])) {
             return malformed('SOA');
         }
-        displayData = `mname: ${msg.mname}, rname: ${msg.rname}, serial: ${msg.serial}, refresh: ${msg.refresh}, retry: ${msg.retry}, expire: ${msg.expire}, minimum: ${msg.minimum}`;
+        return `mname: ${formatSoaMname(msg.mname)}` +
+            escapeHtml(`, rname: ${msg.rname}, serial: ${msg.serial}, refresh: ${msg.refresh}, retry: ${msg.retry}, expire: ${msg.expire}, minimum: ${msg.minimum}`);
     } else if (type === 'SRV') {
         if (!hasFields(msg, ['priority', 'weight', 'port', 'target'])) {
             return malformed('SRV');
@@ -652,6 +653,8 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     let questionClass = '';
     const addQueryLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot, '', ixfrSerial);
     const addQueryActionLinkToDisplayData = (...args) => addLinkToDisplayData(...args, queryClass, sendDot, 'notice-action', ixfrSerial);
+    const formatSoaMname = (mname) => addLinkToDisplayData(origin, pathname, 'a.root-servers.net', mname, 'A', false, checkingDisabled,
+        sendTcp, sendIpv6, false, '', edns0Enable, dnssecOk, udpSize, nsidEnable, '', qnameMinimisation, 255, qnameType, mname, queryClass);
     const authorityNsRecords = (response.authorities || []).filter(record => record.type === 'NS');
     const nameServerAuthorities = new Map();
     let fallbackAuthority = null;
@@ -848,7 +851,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             qnamePosition--;
         }
         response.answers.forEach((answer) => {
-            let displayData = decodeResourceRecord(answer.type, answer.data);
+            let displayData = decodeResourceRecord(answer.type, answer.data, formatSoaMname);
             if (displayData.length === 0) {
                 if (answer.type === 'CNAME') {
                     // CNAMEレコードはデータを検索対象ドメイン名として扱い、後続の検索ができるようにする
@@ -904,7 +907,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
     if (response.authorities && response.authorities.length > 0) {
         html += '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th scope="col">TYPE</th><th scope="col">NAME</th><th scope="col">CLASS</th><th scope="col">DATA</th><th scope="col">TTL</th></tr></thead><tbody>';
         response.authorities.forEach((authorities) => {
-            let displayData = decodeResourceRecord(authorities.type, authorities.data);
+            let displayData = decodeResourceRecord(authorities.type, authorities.data, formatSoaMname);
             if (displayData.length === 0) {
                 if (authorities.type === 'NS') {
                     displayData = addQueryLinkToDisplayData(origin, pathname, authorities.data, domainName, queryType, recursionDesired, checkingDisabled,
@@ -939,7 +942,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
             html += '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th scope="col">TYPE</th><th scope="col">NAME</th><th scope="col">CLASS</th><th scope="col">DATA</th><th scope="col">TTL</th></tr></thead><tbody>';
         }
         response.additionals.forEach((additionals) => {
-            let displayData = decodeResourceRecord(additionals.type, additionals.data);
+            let displayData = decodeResourceRecord(additionals.type, additionals.data, formatSoaMname);
             if (displayData.length === 0) {
                 if (additionals.type === 'A' || additionals.type === 'AAAA') {
                     displayData = addQueryLinkToDisplayData(origin, pathname, additionals.data, domainName, queryType, recursionDesired, checkingDisabled,
