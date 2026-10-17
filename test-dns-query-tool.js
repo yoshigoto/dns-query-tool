@@ -234,6 +234,35 @@ test('Authority NS と Additional A/AAAA の RFC 9499 関係を DATA 列に表�
     assert.equal((html.match(/class="rr-annotation">RFC 9499: unrelated/g) || []).length, 3);
 });
 
+test('OPTのEDNSバージョンをワイヤ形式からデコードして表示する', () => {
+    for (const ednsVersion of [0, 1, 255]) {
+        const wire = dnsPacket.encode({
+            type: 'response',
+            id: 100,
+            questions: [{ name: 'opt-badvers.anomaly.test.ldns.jp', type: 'A' }],
+            answers: [],
+            authorities: [],
+            additionals: [{
+                type: 'OPT',
+                name: '.',
+                ednsVersion,
+                udpPayloadSize: 4096,
+                flags: 0,
+                options: []
+            }]
+        });
+        const response = dnsPacket.decode(wire);
+        assert.equal(response.additionals[0].ednsVersion, ednsVersion);
+
+        const html = makeHtmlFromDns(response, 20, 'http://localhost:3000', '/api/query',
+            'ns2.ldns.jp', '160.16.111.88', 'opt-badvers.anomaly.test.ldns.jp', 'A', 100,
+            true, false, false, false, false, '', true, false, '1232', false, '', false, 255, 'A');
+
+        assert.match(html, new RegExp(`Extended RCODE: 0, Version: ${ednsVersion}, flags: , UDP payload size: 4096`));
+        assert.match(html, /<dt>応答ステータス \(rcode\)<\/dt><dd><code>NOERROR<\/code><\/dd>/);
+    }
+});
+
 test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
     const html = makeHtmlFromDns({
         id: 100,
@@ -246,7 +275,7 @@ test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
             type: 'OPT',
             name: '.',
             extendedRcode: 1,
-            version: 0,
+            ednsVersion: 0,
             udpPayloadSize: 1232,
             flags: 0,
             options: []
@@ -271,7 +300,7 @@ test('Extended RCODEの略称をヘッダーRCODEと合成して判定する', (
             type: 'OPT',
             name: '.',
             extendedRcode: 1,
-            version: 0,
+            ednsVersion: 0,
             udpPayloadSize: 1232,
             flags: 0,
             options: []

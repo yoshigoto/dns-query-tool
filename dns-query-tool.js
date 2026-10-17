@@ -1087,7 +1087,7 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                         const extendedRcodeDisplay = extendedRcodeName
                             ? `${extendedRcode} (${extendedRcodeName})`
                             : `${extendedRcode}`;
-                        optPseudoItems = [`<li><strong>EDNS</strong><code>Extended RCODE: ${extendedRcodeDisplay}, Version: ${optRecord.version || 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`];
+                        optPseudoItems = [`<li><strong>EDNS</strong><code>Extended RCODE: ${extendedRcodeDisplay}, Version: ${optRecord.ednsVersion ?? 0}, flags: ${flagString}, UDP payload size: ${optRecord.udpPayloadSize}</code></li>`];
                         if (nsidFound) {
                             optPseudoItems.push(`<li><strong>NSID</strong><code>${nsidString || '(empty)'}</code></li>`);
                         }
