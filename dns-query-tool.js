@@ -485,8 +485,7 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
         }
         displayData = `priority: ${msg.priority}, weight: ${msg.weight}, port: ${msg.port}, target: ${msg.target}`;
     } else if (type === 'TLSA') {
-        if (!hasFields(msg, ['usage', 'selector', 'matchingType']) ||
-            (!Buffer.isBuffer(msg.certificate) && !Buffer.isBuffer(msg.data))) {
+        if (!hasFields(msg, ['usage', 'selector', 'matchingType']) || !Buffer.isBuffer(msg.certificate)) {
             return malformed('TLSA');
         }
         const usageNames = { 0: 'PKIX-TA', 1: 'PKIX-EE', 2: 'DANE-TA', 3: 'DANE-EE' };
@@ -495,19 +494,17 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
         const usageStr = usageNames[msg.usage] !== undefined ? usageNames[msg.usage] : msg.usage;
         const selectorStr = selectorNames[msg.selector] !== undefined ? selectorNames[msg.selector] : msg.selector;
         const matchingTypeStr = matchingTypeNames[msg.matchingType] !== undefined ? matchingTypeNames[msg.matchingType] : msg.matchingType;
-        const certHex = Buffer.isBuffer(msg.certificate) ? msg.certificate.toString('hex') : (msg.certificate || (Buffer.isBuffer(msg.data) ? msg.data.toString('hex') : msg.data || ''));
+        const certHex = msg.certificate.toString('hex');
         displayData = `usage: ${usageStr}, selector: ${selectorStr}, matchingType: ${matchingTypeStr}, certificate: ${certHex}`;
     } else if (type === 'SSHFP') {
-        if (!hasFields(msg, ['algorithm']) || (msg.fpType === undefined && msg.type === undefined) ||
-            (!Buffer.isBuffer(msg.fingerprint) && !Buffer.isBuffer(msg.data))) {
+        if (!hasFields(msg, ['algorithm', 'hash']) || typeof msg.fingerprint !== 'string') {
             return malformed('SSHFP');
         }
         const algoNames = { 1: 'RSA', 2: 'DSA', 3: 'ECDSA', 4: 'Ed25519' };
         const fpTypeNames = { 1: 'SHA-1', 2: 'SHA-256' };
         const algo = algoNames[msg.algorithm] !== undefined ? algoNames[msg.algorithm] : msg.algorithm;
-        const fpTypeVal = msg.fpType !== undefined ? msg.fpType : msg.type;
-        const fpTypeStr = fpTypeNames[fpTypeVal] !== undefined ? fpTypeNames[fpTypeVal] : fpTypeVal;
-        const fpHex = Buffer.isBuffer(msg.fingerprint) ? msg.fingerprint.toString('hex') : (msg.fingerprint || (Buffer.isBuffer(msg.data) ? msg.data.toString('hex') : msg.data || ''));
+        const fpTypeStr = fpTypeNames[msg.hash] !== undefined ? fpTypeNames[msg.hash] : msg.hash;
+        const fpHex = msg.fingerprint.toLowerCase();
         displayData = `algorithm: ${algo}, fpType: ${fpTypeStr}, fingerprint: ${fpHex}`;
     } else if (type === 'NAPTR') {
         if (!hasFields(msg, ['order', 'preference', 'flags', 'services', 'regexp', 'replacement'])) {

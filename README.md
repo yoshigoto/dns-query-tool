@@ -24,6 +24,8 @@ https://www.on-link.jp/dns-query-tool/
 
 応答の `OPT PSEUDOSECTION` の `Version` には、受信した OPT レコードの EDNS バージョンを表示します。送信クエリーは EDNS0（バージョン0）ですが、応答にバージョン1などが含まれる場合も、その値を表示します。
 
+SSHFP レコードは dns-packet が返す `hash` と16進文字列の `fingerprint` を使用し、ハッシュ種別を `fpType`（SHA-1 / SHA-256）、フィンガープリントを小文字の16進表記で表示します。
+
 ## 使い方
 
 1. 「対象ドメイン名」に問い合わせたいドメイン名を入力します。

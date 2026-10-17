@@ -1165,7 +1165,8 @@ test('SOA のリンク名とその他のフィールドを HTML エスケープ�
 });
 
 test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証する', () => {
-    const html = makeHtmlFromDns({
+    const packet = dnsPacket.encode({
+        type: 'response',
         id: 100,
         flags: 0,
         rcode: 'NOERROR',
@@ -1181,7 +1182,7 @@ test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証�
                 name: 'example.com',
                 type: 'SSHFP',
                 ttl: 300,
-                data: { algorithm: 4, fpType: 2, fingerprint: Buffer.from('1234', 'hex') }
+                data: { algorithm: 4, hash: 2, fingerprint: '1234abcd'.repeat(8) }
             },
             {
                 name: 'example.com',
@@ -1192,12 +1193,66 @@ test('TLSA, SSHFP, NAPTR リソースレコードのデコード表示を検証�
         ],
         authorities: [],
         additionals: []
-    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'TLSA', 100,
+    });
+    const response = dnsPacket.decode(packet);
+    const html = makeHtmlFromDns(response, packet.length, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'TLSA', 100,
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /<span class="rr-type rr-type-answer">TLSA<\/span>.*?usage: DANE-EE, selector: SPKI, matchingType: SHA-256, certificate: abcd/s);
-    assert.match(html, /<span class="rr-type rr-type-answer">SSHFP<\/span>.*?algorithm: Ed25519, fpType: SHA-256, fingerprint: 1234/s);
+    assert.ok(html.includes(`algorithm: Ed25519, fpType: SHA-256, fingerprint: ${'1234abcd'.repeat(8)}</code>`));
+    assert.doesNotMatch(html, /malformed/);
     assert.match(html, /<span class="rr-type rr-type-answer">NAPTR<\/span>.*?order: 100, preference: 10, flags: S, services: SIP\+D2U/s);
+});
+
+test('SSHFP の実デコード結果を全セクションで表示する', () => {
+    for (const section of ['answers', 'authorities', 'additionals']) {
+        for (const [hash, hashName, length] of [[1, 'SHA-1', 20], [2, 'SHA-256', 32]]) {
+            const fingerprint = 'ab'.repeat(length);
+            const packet = dnsPacket.encode({
+                type: 'response',
+                id: 100,
+                questions: [{ name: 'example.com', type: 'SSHFP' }],
+                answers: [],
+                authorities: [],
+                additionals: [],
+                [section]: [{
+                    name: 'example.com', type: 'SSHFP', ttl: 300,
+                    data: { algorithm: 255, hash, fingerprint }
+                }]
+            });
+            const response = dnsPacket.decode(packet);
+            assert.deepEqual(response[section][0].data, {
+                algorithm: 255, hash, fingerprint: fingerprint.toUpperCase()
+            });
+            const html = makeHtmlFromDns(response, packet.length, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', 'SSHFP', 100,
+                false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A');
+
+            assert.ok(html.includes(`algorithm: 255, fpType: ${hashName}, fingerprint: ${fingerprint}</code>`), `${section}, hash=${hash}`);
+            assert.doesNotMatch(html, /malformed SSHFP RDATA/);
+        }
+    }
+});
+
+test('TLSA と SSHFP は dns-packet にない代替フィールドや型を受け付けない', () => {
+    const invalidRecords = [
+        { type: 'TLSA', data: { usage: 3, selector: 1, matchingType: 1, data: Buffer.from('abcd', 'hex') } },
+        { type: 'TLSA', data: { usage: 3, selector: 1, matchingType: 1, certificate: 'abcd' } },
+        { type: 'SSHFP', data: { algorithm: 4, fpType: 2, fingerprint: 'ab'.repeat(32) } },
+        { type: 'SSHFP', data: { algorithm: 4, type: 2, fingerprint: 'ab'.repeat(32) } },
+        { type: 'SSHFP', data: { algorithm: 4, hash: 2, fingerprint: Buffer.alloc(32) } },
+        { type: 'SSHFP', data: { algorithm: 4, hash: 2, data: Buffer.alloc(32) } }
+    ];
+    for (const record of invalidRecords) {
+        const html = makeHtmlFromDns({
+            type: 'response', id: 100, flags: 0, rcode: 'NOERROR',
+            questions: [{ name: 'example.com', type: record.type }],
+            answers: [{ ...record, name: 'example.com', ttl: 300 }],
+            authorities: [], additionals: []
+        }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'example.com', record.type, 100,
+        false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A');
+
+        assert.match(html, new RegExp(`malformed ${record.type} RDATA`));
+    }
 });
 
 test('SPF, NSEC3PARAM, CDS, CDNSKEY の生 RDATA をデコード表示する', () => {
@@ -1292,7 +1347,7 @@ test('既存のオブジェクト型 RDATA の必須フィールド欠損を mal
         { type: 'SOA', data: {} },
         { type: 'SRV', data: {} },
         { type: 'TLSA', data: { usage: 3, selector: 1, matchingType: 1 } },
-        { type: 'SSHFP', data: { algorithm: 4, fpType: 2 } },
+        { type: 'SSHFP', data: { algorithm: 4, hash: 2 } },
         { type: 'NAPTR', data: {} }
     ];
 
