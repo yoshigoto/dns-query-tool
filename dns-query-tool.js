@@ -167,7 +167,7 @@ const checkOptRdataAnomalies = (buf) => {
                 const optLen = buf.readUInt16BE(rdataStart + optOffset + 2);
                 const remainingData = actualRdataLen - (optOffset + 4);
                 if (optLen > remainingData) {
-                    errors.push(`EDNS Option (コード ${optCode}) の OPTION-LENGTH (${optLen} バイト) が RDATA の残り長さ (${remainingData} バイト) を超過しています`);
+                    errors.push(`EDNS Option (コード ${optCode}) の OPTION-LENGTH (${optLen} バイト) が RDATA の残りの長さ (${remainingData} バイト) を超過しています`);
                     break;
                 }
                 optOffset += 4 + optLen;
@@ -229,7 +229,7 @@ const getOptPseudoSectionStatusHtml = (response, rawBuf = null) => {
 
     const uniqueReasons = [...new Set(reasons)].filter(Boolean);
     const reasonText = uniqueReasons.length > 0 ? uniqueReasons.join(' / ') : 'OPT 疑似セクションの内部データが不完全です';
-    return `<p style="color: red; margin: 0;">OPT疑似セクションとして破損しています: <code>${escapeHtml(reasonText)}</code></p>`;
+    return `<p style="color: red; margin: 0;">OPT 疑似セクションとしては破損しています: <code>${escapeHtml(reasonText)}</code></p>`;
 };
 
 const getNegativeCacheHtml = (response) => {
