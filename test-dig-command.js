@@ -267,8 +267,8 @@ test('旧command URLは実行せずURLから除去し、再入力を案内する
 
 test('JavaScriptが読み込めない場合もフォームから生コマンドを送信しない', () => {
     const html = fs.readFileSync(path.join(__dirname, 'dig.html'), 'utf8');
-    assert.match(html, /<textarea id="command"[^>]*autocomplete="off"/);
-    assert.doesNotMatch(html, /<textarea[^>]*name=/);
+    assert.match(html, /<input type="text" id="command"[^>]*autocomplete="off"/);
+    assert.doesNotMatch(html, /<input[^>]*name=/);
 });
 
 const request = (port, pathname) => new Promise((resolve, reject) => {

@@ -38,6 +38,7 @@ SOA レコードの `mname` は、そのゾーンのプライマリサーバー�
 ### dig コマンド形式で入力する
 
 通常のフォームとは別に、`dig.html`（ローカルでは `http://127.0.0.1:3000/dig.html` または `http://127.0.0.1:3000/dns-query-tool/dig.html`）で dig コマンド、または引数だけを入力できます。通常画面からも移動できます。
+入力欄は1行で、Enterキーまたは「DNSメッセージを送信」ボタンで送信できます。
 
 ```text
 dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec
