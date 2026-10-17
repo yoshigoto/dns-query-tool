@@ -733,7 +733,7 @@ const buildWarningSectionHtml = (warningHtml) => {
     if (!warningHtml || !String(warningHtml).trim()) {
         return '';
     }
-    return `<p><strong>WARNING SECTION:</strong></p><div class="section-notice" style="border-left: 4px solid #ff8c00; padding-left: 10px; color: #8a4b00;">${warningHtml}</div>`;
+    return `<p><strong>WARNING SECTION</strong></p><div class="section-notice" style="border-left: 4px solid #ff8c00; padding-left: 10px; color: #8a4b00;">${warningHtml}</div>`;
 };
 
 const wrapSectionNoticeHtml = (noticeHtml) => {
