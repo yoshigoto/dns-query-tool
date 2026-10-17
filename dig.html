@@ -15,16 +15,16 @@
         <p><a id="form-link" href="./">通常の入力フォームへ</a></p>
         <section id="search-panel">
             <form id="dig-search">
-                <label for="command">dig コマンドまたは引数:</label>
+                <label for="command">dig コマンドとその引数:</label>
                 <input type="text" id="command" class="dig-input" required autofocus spellcheck="false" autocomplete="off"
                     placeholder="dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec">
                 <button type="submit">DNSメッセージを送信</button>
             </form>
         </section>
         <section class="explanation">
-            <p>コマンドは実行せず、対応する引数だけを本ツールのDNS送信設定へ変換します。
-                未対応の引数と値は赤字・波線で表示し、無視した理由も表示します。</p>
-            <p>URL・履歴には対応するDNS設定だけを保存します。元の入力や無視した引数は保存しません。
+            <p>コマンドは実行せず、対応する引数だけを本ツールの DNS送信設定へ変換します。
+                未対応の引数と値があれば「入力されたコマンド」欄に赤字・波線で表示し、無視した理由も表示します。</p>
+            <p>URLや履歴には、本ツールで有効な DNS設定だけを保存します。元の入力や無視した引数は保存しません。
                 再読み込み・履歴復元時には設定からコマンドを再構成します。鍵などの機密情報は入力しないでください。</p>
             <p>既定値: IN、A（対象名省略時は . NS）、RD On、EDNS0 On、UDPサイズ1232、
                 DNSサーバー a.root-servers.net。OSのリゾルバー設定や .digrc は使用しません。</p>
@@ -34,13 +34,13 @@
                     +[no]rd/recurse、+[no]cd/cdflag、+[no]dnssec、+[no]nsid、+[no]tcp/vc、
                     +[no]tls、+[no]https[=/path]、+edns[=0]/+noedns、+bufsize=N、
                     ixfr=N、delv の +[no]qmin に対応します。オプション名の省略形には対応しません。</p>
-                <p>-4/-6 は本ツールのIPv4/IPv6優先設定です（digの通信ファミリー固定とは異なります）。
-                    TLS/HTTPSでは証明書を検証します。+qmin は本ツールのQNAME minimisationで、
-                    委任を辿る操作は手動です。DNSSEC検証は行いません。</p>
-                <p>問い合わせは1件のみです。表示形式、+trace、タイムアウト、任意のポート、送信元指定、
-                    TSIG、ファイル入力、未対応のEDNSオプションなどは無視します。
-                    シェルの変数展開、パイプ、リダイレクトは実行しません。</p>
-                <p>結果中のリンクで委任を辿ると、通常の入力フォームに移動します。</p>
+                <p>-4/-6 は、本ツールにおいては IPv4/IPv6優先設定です（dig の通信ファミリー固定とは異なります）。
+                    TLS/HTTPS では証明書を検証します。+qmin は本ツールの QNAME minimisation を有効化しますが、本ツールの仕様の通り、委任を辿る操作は手動です。
+                    同様に、DNSSEC検証は行いません。</p>
+                <p>問い合わせは 1件のみです。表示形式、+trace、タイムアウト、任意のポート、送信元指定、
+                    TSIG、ファイル入力、未対応の EDNSオプションなどは無視します。
+                    シェルの変数展開、パイプ、リダイレクトは処理しません。</p>
+                <p>結果中のリンクで委任を辿ると、通常の入力フォームに遷移します。</p>
             </details>
         </section>
         <section id="dig-summary" aria-live="polite" hidden>

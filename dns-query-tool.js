@@ -1456,7 +1456,7 @@ const analyzeDnsPacketError = (rawBuf, originalError, tcpFramed = false) => {
         if (offset < buf.length) {
             const declaredResourceRecordCount = ancount + nscount + arcount;
             const remainingBytes = buf.length - offset;
-            throw new Error(`ヘッダー宣言のリソースレコード総数 (ANCOUNT + NSCOUNT + ARCOUNT: ${declaredResourceRecordCount} 個) に対し、実際のリソースレコードは ${declaredResourceRecordCount + 1} 個です。ANCOUNT、NSCOUNT、ARCOUNT のいずれかが実際の件数より小さく、1 個の余剰レコードがあります。さらに、ヘッダーで指定された RR をすべて読んだ後も、メッセージ末尾に ${remainingBytes} バイトの未消費データが残っています (extra bytes at end)。`);
+            throw new Error(`ヘッダー宣言のリソースレコード総数 (ANCOUNT + NSCOUNT + ARCOUNT: ${declaredResourceRecordCount} 個) に対し、実際のリソースレコードは ${declaredResourceRecordCount + 1} 個です。ANCOUNT、NSCOUNT、ARCOUNT のいずれかが実際の件数より小さく、1 個の余剰レコードがあります。さらに、ヘッダーで指定された RR をすべて読んだ後も、メッセージ末尾に ${remainingBytes} バイトの未解析データが残っています (extra bytes at end)。`);
         }
     } catch (e) {
         anomalyReason = e.message;
