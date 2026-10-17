@@ -180,6 +180,32 @@
         return { command, tokens, params };
     };
 
-    if (typeof module === 'object' && module.exports) module.exports = { parseDigCommand };
-    else root.DigCommand = { parseDigCommand };
+    const formatDigCommand = (params) => {
+        const quote = (value) => `'${value.replace(/'/g, "'\\''")}'`;
+        const type = params.get('type') || 'A';
+        const command = ['dig', `@${quote(params.get('server') || 'a.root-servers.net')}`];
+        command.push(type === 'PTR-x' ? '-x' : '-q', quote(params.get('name') || '.'));
+        if (type !== 'PTR-x') {
+            command.push('-t', quote(type === 'IXFR' ? `ixfr=${params.get('ixfrserial') || ''}` : type));
+        }
+        command.push('-c', quote(params.get('class') || 'IN'));
+        if (params.has('ipv6')) command.push(params.get('ipv6') === '1' ? '-6' : '-4');
+        for (const [key, option] of Object.entries({ rd: 'rd', cd: 'cd', dnssec: 'dnssec', nsid: 'nsid', qmini: 'qmin' })) {
+            if (params.has(key)) command.push(`+${params.get(key) === '1' ? '' : 'no'}${option}`);
+        }
+        for (const enabled of [false, true]) {
+            for (const [key, option] of Object.entries({ tcp: 'tcp', dot: 'tls', https: 'https' })) {
+                if (!params.has(key) || (params.get(key) === '1') !== enabled) continue;
+                command.push(key === 'https' && enabled ?
+                    quote(`+https=${params.get('httpspath') || '/dns-query'}`) : `+${enabled ? '' : 'no'}${option}`);
+            }
+        }
+        if (params.has('udpsize')) command.push(quote(`+bufsize=${params.get('udpsize')}`));
+        // Restore EDNS last: DNSSEC, NSID and bufsize otherwise enable it.
+        if (params.has('edns0')) command.push(params.get('edns0') === '1' ? '+edns=0' : '+noedns');
+        return command.join(' ');
+    };
+
+    if (typeof module === 'object' && module.exports) module.exports = { parseDigCommand, formatDigCommand };
+    else root.DigCommand = { parseDigCommand, formatDigCommand };
 })(globalThis);

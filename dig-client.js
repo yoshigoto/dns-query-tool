@@ -54,11 +54,11 @@
         settings.textContent = [...parsed.params].map(([key, value]) => `${key}=${value}`).join('\n');
         formLink.href = `${applicationUrl}?${parsed.params}`;
         summary.hidden = false;
-        if (updateHistory) {
-            const url = new URL(location.href);
-            url.search = new URLSearchParams({ command: parsed.command }).toString();
-            history.pushState(null, '', url);
-        }
+        const url = new URL(location.href);
+        url.search = parsed.params.toString();
+        url.hash = '';
+        if (updateHistory) history.pushState(null, '', url);
+        else history.replaceState(null, '', url);
         results.textContent = 'DNS クエリーを送信しています...';
         try {
             const response = await fetch(`${apiUrl}?${parsed.params}`, { signal: request.signal });
@@ -82,10 +82,19 @@
     });
     const restore = () => {
         const params = new URLSearchParams(location.search);
-        input.value = params.get('command') || '';
-        if (params.has('command')) runCommand(false);
-        else {
+        input.value = '';
+        if (params.has('command')) {
             activeRequest?.abort();
+            history.replaceState(null, '', location.pathname);
+            summary.hidden = true;
+            formLink.href = applicationUrl.href;
+            showError('安全のため、旧形式URLの入力コマンドを削除しました。コマンドを再入力してください。');
+        } else if (params.has('name')) {
+            input.value = DigCommand.formatDigCommand(params);
+            runCommand(false);
+        } else {
+            activeRequest?.abort();
+            history.replaceState(null, '', location.pathname);
             summary.hidden = true;
             results.replaceChildren();
             formLink.href = applicationUrl.href;

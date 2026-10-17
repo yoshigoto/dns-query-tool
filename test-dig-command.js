@@ -7,7 +7,7 @@ const http = require('node:http');
 const dgram = require('node:dgram');
 const { EventEmitter } = require('node:events');
 const dnsPacket = require('dns-packet');
-const { parseDigCommand } = require('./dig-command');
+const { parseDigCommand, formatDigCommand } = require('./dig-command');
 const { SUPPORTED_QUERY_TYPES, SUPPORTED_QUERY_CLASSES } = require('./dns-query-options');
 const { server } = require('./dns-query-tool');
 
@@ -148,6 +148,127 @@ test('ブラウザーでも共通パーサーを読み込める', () => {
         vm.runInContext(fs.readFileSync(path.join(__dirname, file), 'utf8'), context);
     }
     assert.equal(context.DigCommand.parseDigCommand('dig example.com +cd').params.get('cd'), '1');
+});
+
+test('保存したDNS設定から、未対応引数を含まないコマンドを再構成する', () => {
+    for (const command of [
+        'dig',
+        'dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec -y hmac:TEST_SECRET',
+        'dig example.com +noedns +nsid +noedns +qmin +nord -4',
+        'dig example.com ixfr=42 +notcp',
+        'dig -x 2001:db8::1 +tls',
+        'dig example.com +https=/custom-dns +bufsize=4096',
+        'dig -q "name\'with quote.example" +short',
+        'dig -q "example.com +rd -y TEST_SECRET"'
+    ]) {
+        const parsed = parseDigCommand(command);
+        const restored = parseDigCommand(formatDigCommand(parsed.params));
+        assert.deepEqual(Object.fromEntries(restored.params), Object.fromEntries(parsed.params), command);
+        assert.deepEqual(ignored(restored), []);
+    }
+    const params = new URLSearchParams('name=example.com&command=TEST_SECRET&unknown=TEST_SECRET');
+    const command = formatDigCommand(params);
+    assert.doesNotMatch(command, /TEST_SECRET|unknown|command=/);
+});
+
+const createDigClient = (search = '') => {
+    const element = () => ({
+        value: '', textContent: '', hidden: false, children: [], listeners: {},
+        addEventListener(event, callback) { this.listeners[event] = callback; },
+        replaceChildren(...children) { this.children = children; },
+        append(...children) { this.children.push(...children); },
+        querySelectorAll() { return []; }
+    });
+    const elements = Object.fromEntries([
+        'dig-search', 'command', 'dig-summary', 'parsed-command', 'ignored-options',
+        'parsed-settings', 'results', 'form-link'
+    ].map((id) => [id, element()]));
+    const location = new URL(`http://localhost/dns-query-tool/dig.html${search}`);
+    const histories = [];
+    const requests = [];
+    const windowListeners = {};
+    const recordHistory = (method) => (state, title, url) => {
+        histories.push({ method, state, url: String(url) });
+        location.href = new URL(url, location).href;
+    };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'dig-client.js'), 'utf8'), {
+        document: {
+            baseURI: location.href,
+            getElementById: (id) => elements[id],
+            createElement: element
+        },
+        DigCommand: { parseDigCommand, formatDigCommand },
+        URL, URLSearchParams, AbortController, location,
+        history: { pushState: recordHistory('push'), replaceState: recordHistory('replace') },
+        window: { addEventListener: (event, callback) => { windowListeners[event] = callback; } },
+        fetch: async (url) => {
+            requests.push(String(url));
+            return { ok: true, text: async () => '<p>DNS response</p>' };
+        }
+    });
+    return {
+        elements, location, histories, requests, windowListeners,
+        submit(command) {
+            elements.command.value = command;
+            elements['dig-search'].listeners.submit({ preventDefault() {} });
+        }
+    };
+};
+
+test('TSIGキー・未対応の値・元コマンドはURL、履歴state、APIへ保存・送信しない', async () => {
+    for (const key of ['-y hmac-sha256:key:TEST_SECRET', '-yhmac-sha256:key:TEST_SECRET']) {
+        const client = createDigClient();
+        client.submit(`dig @8.8.8.8 example.com +cd ${key} -k PRIVATE_FILE +unknown=PRIVATE_VALUE`);
+        await new Promise((resolve) => setImmediate(resolve));
+        const saved = JSON.stringify({ history: client.histories, requests: client.requests, url: client.location.href });
+        assert.doesNotMatch(saved, /TEST_SECRET|PRIVATE_FILE|PRIVATE_VALUE|command=|unknown/);
+        assert.equal(client.requests.length, 1);
+        assert.equal(client.location.searchParams.get('name'), 'example.com');
+        assert.equal(client.location.searchParams.get('cd'), '1');
+        assert.match(client.elements['parsed-command'].children
+            .map((child) => typeof child === 'string' ? child : child.textContent).join(''), /TEST_SECRET/);
+        assert.equal(client.elements['ignored-options'].children.length, key.startsWith('-y ') ? 5 : 4);
+    }
+});
+
+test('再読み込みと履歴では保存設定だけを復元し、不明なURLパラメーターを破棄する', async () => {
+    const initial = createDigClient();
+    initial.submit('dig example.com +dnssec +noedns +https=/custom -y key:TEST_SECRET');
+    const restored = createDigClient(initial.location.search + '&unknown=PRIVATE_VALUE#PRIVATE_FRAGMENT');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(restored.requests.length, 1);
+    assert.deepEqual(
+        Object.fromEntries(new URL(restored.requests[0]).searchParams),
+        Object.fromEntries(new URL(initial.requests[0]).searchParams)
+    );
+    assert.doesNotMatch(JSON.stringify(restored.histories), /TEST_SECRET|PRIVATE_VALUE|PRIVATE_FRAGMENT/);
+    assert.doesNotMatch(restored.elements.command.value, /TEST_SECRET|-y/);
+    assert.equal(restored.elements['ignored-options'].children.length, 0);
+
+    restored.location.search = '?name=example.net&type=AAAA&rd=0';
+    restored.windowListeners.popstate();
+    assert.equal(new URL(restored.requests.at(-1)).searchParams.get('name'), 'example.net');
+    assert.equal(new URL(restored.requests.at(-1)).searchParams.get('type'), 'AAAA');
+    assert.equal(new URL(restored.requests.at(-1)).searchParams.get('rd'), '0');
+    restored.location.search = '';
+    restored.windowListeners.popstate();
+    assert.equal(restored.elements.command.value, '');
+    assert.equal(restored.elements['dig-summary'].hidden, true);
+});
+
+test('旧command URLは実行せずURLから除去し、再入力を案内する', () => {
+    const client = createDigClient(`?command=${encodeURIComponent('dig example.com -y key:TEST_SECRET')}`);
+    assert.equal(client.requests.length, 0);
+    assert.equal(client.location.search, '');
+    assert.equal(client.elements.command.value, '');
+    assert.doesNotMatch(JSON.stringify(client.histories), /TEST_SECRET|command=/);
+    assert.match(client.elements.results.children[0].children[0].textContent, /旧形式URL.*再入力/);
+});
+
+test('JavaScriptが読み込めない場合もフォームから生コマンドを送信しない', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'dig.html'), 'utf8');
+    assert.match(html, /<textarea id="command"[^>]*autocomplete="off"/);
+    assert.doesNotMatch(html, /<textarea[^>]*name=/);
 });
 
 const request = (port, pathname) => new Promise((resolve, reject) => {

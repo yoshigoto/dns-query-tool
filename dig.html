@@ -16,7 +16,7 @@
         <section id="search-panel">
             <form id="dig-search">
                 <label for="command">dig コマンドまたは引数:</label>
-                <textarea id="command" name="command" class="dig-input" rows="3" required autofocus spellcheck="false"
+                <textarea id="command" class="dig-input" rows="3" required autofocus spellcheck="false" autocomplete="off"
                     placeholder="dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec"></textarea>
                 <button type="submit">DNSメッセージを送信</button>
             </form>
@@ -24,6 +24,8 @@
         <section class="explanation">
             <p>コマンドは実行せず、対応する引数だけを本ツールのDNS送信設定へ変換します。
                 未対応の引数と値は赤字・波線で表示し、無視した理由も表示します。</p>
+            <p>URL・履歴には対応するDNS設定だけを保存します。元の入力や無視した引数は保存しません。
+                再読み込み・履歴復元時には設定からコマンドを再構成します。鍵などの機密情報は入力しないでください。</p>
             <p>既定値: IN、A（対象名省略時は . NS）、RD On、EDNS0 On、UDPサイズ1232、
                 DNSサーバー a.root-servers.net。OSのリゾルバー設定や .digrc は使用しません。</p>
             <details>
