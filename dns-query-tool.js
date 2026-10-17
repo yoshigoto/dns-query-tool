@@ -10,7 +10,7 @@ const dnsTypes = require('dns-packet/types');
 const dnsClasses = require('dns-packet/classes');
 
 const DNSSEC_OK = dnsPacket.DNSSEC_OK || 0x8000; // RFC 3225 DNSSEC OK flag
-const COMPACT_ANSWERS_OK = dnsPacket.COMPACT_ANSWERS_OK || 0x4000; // RFC 9801 Compact Answers OK flag
+const COMPACT_ANSWERS_OK = dnsPacket.COMPACT_ANSWERS_OK || 0x4000; // RFC 9824 Compact Answers OK flag
 
 const RCODE_NAMES = {
     0: 'NOERROR',
@@ -35,7 +35,7 @@ const RCODE_NAMES = {
 };
 
 const EXTENDED_RCODE_NAMES = {
-    16: 'BADVERS / BADSIG',
+    16: 'BADVERS',
     17: 'BADKEY',
     18: 'BADTIME',
     19: 'BADMODE',
@@ -78,6 +78,33 @@ const getResponseRcodeNumber = (response) => {
 const getResponseRcode = (response) => {
     const rcodeNumber = getResponseRcodeNumber(response);
     return RCODE_NAMES[rcodeNumber] || `RCODE_${rcodeNumber}`;
+};
+
+const getEdnsOptionDataError = (option) => {
+    const data = option.data;
+    if (!Buffer.isBuffer(data)) {
+        return `EDNS Option (${option.code}) の OPTION-DATA が不正です`;
+    }
+    if (option.code === 8) {
+        if (data.length < 4) return 'malformed ECS OPTION-DATA (RFC 7871)';
+        const family = data.readUInt16BE(0);
+        const addressBits = family === 1 ? 32 : family === 2 ? 128 : 0;
+        const sourcePrefix = data[2];
+        const scopePrefix = data[3];
+        const unusedBits = (8 - sourcePrefix % 8) % 8;
+        if (addressBits === 0 || sourcePrefix > addressBits || scopePrefix > addressBits ||
+            data.length !== 4 + Math.ceil(sourcePrefix / 8) ||
+            (sourcePrefix > 0 && (data[data.length - 1] & ((1 << unusedBits) - 1)) !== 0)) {
+            return 'malformed ECS OPTION-DATA (RFC 7871)';
+        }
+    } else if (option.code === 10) {
+        if (data.length !== 8 && (data.length < 16 || data.length > 40)) {
+            return 'malformed Cookie OPTION-DATA (RFC 7873)';
+        }
+    } else if (option.code === 15 && data.length < 2) {
+        return 'malformed EDE OPTION-DATA (RFC 8914)';
+    }
+    return '';
 };
 
 const checkOptRdataAnomalies = (buf) => {
@@ -171,11 +198,6 @@ const getOptPseudoSectionStatusHtml = (response, rawBuf = null) => {
     }
 
     for (const record of optRecords) {
-        if (record.extendedRcode === 22) {
-            malformed = true;
-            reasons.push('Extended RCODE が BADTRUNC (22) を示しており、DNSメッセージの本来の姿から乖離しています');
-        }
-
         const options = Array.isArray(record.options) ? record.options : [];
         if (options.length === 0) {
             continue;
@@ -188,11 +210,15 @@ const getOptPseudoSectionStatusHtml = (response, rawBuf = null) => {
                 continue;
             }
 
-            const data = option.data;
             if (typeof option.code !== 'number') {
                 malformed = true;
                 reasons.push('OPTION コードが不正です');
                 continue;
+            }
+            const dataError = getEdnsOptionDataError(option);
+            if (dataError) {
+                malformed = true;
+                reasons.push(dataError);
             }
         }
     }
@@ -219,7 +245,7 @@ const getNegativeCacheHtml = (response) => {
     return '';
 };
 
-// RFC 8914 に定義されている INFO-CODE のマッピング表
+// RFC 8914 および後続の IANA 登録に基づく INFO-CODE
 const EDE_ERRORS = {
     0: 'Other Error',
     1: 'Unsupported DNSKEY Algorithm',
@@ -322,6 +348,7 @@ const replaceUnknownRrTypeToKnown = (type) => {
         case 'UNKNOWN_63': return 'ZONEMD';
         case 'UNKNOWN_64': return 'SVCB';
         case 'UNKNOWN_65': return 'HTTPS';
+        case 'UNKNOWN_128': return 'NXNAME';
     }
     return type;
 };
@@ -331,6 +358,7 @@ const replaceKnownToUnknownRrType = (type) => {
         case 'ZONEMD': return 'UNKNOWN_63';
         case 'SVCB': return 'UNKNOWN_64';
         case 'HTTPS': return 'UNKNOWN_65';
+        case 'NXNAME': return 'UNKNOWN_128';
     }
     return type;
 };
@@ -339,6 +367,34 @@ const replaceUnknownRrTypeList = (rrtypes) => {
     return rrtypes.map(item => {
         return replaceUnknownRrTypeToKnown(item);
     });
+};
+
+const encodeBase32Hex = (buffer) => {
+    const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUV';
+    let value = 0;
+    let bits = 0;
+    let result = '';
+    for (const byte of buffer) {
+        value = (value << 8) | byte;
+        bits += 8;
+        while (bits >= 5) {
+            bits -= 5;
+            result += alphabet[(value >>> bits) & 31];
+        }
+        value &= (1 << bits) - 1;
+    }
+    if (bits > 0) result += alphabet[(value << (5 - bits)) & 31];
+    return result;
+};
+
+const formatDnsOctets = (buffer, extraEscapes = '') => {
+    return Array.from(buffer, byte => {
+        const character = String.fromCharCode(byte);
+        if (byte >= 0x21 && byte <= 0x7e && !'\\"();'.includes(character) && !extraEscapes.includes(character)) {
+            return character;
+        }
+        return `\\${String(byte).padStart(3, '0')}`;
+    }).join('');
 };
 
 const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
@@ -387,7 +443,7 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
         if (5 + saltLength !== msg.length) {
             return escapeHtml('malformed NSEC3PARAM RDATA');
         }
-        displayData = `algorithm: ${msg[0]}, flags: ${msg[1]}, iterations: ${msg.readUInt16BE(2)}, salt: ${msg.subarray(5).toString('base64')}`;
+        displayData = `algorithm: ${msg[0]}, flags: ${msg[1]}, iterations: ${msg.readUInt16BE(2)}, salt: ${msg.subarray(5).toString('hex') || '-'}`;
     } else if (type === 'CDS') {
         if (!Buffer.isBuffer(msg) || msg.length < 4) {
             return escapeHtml('malformed CDS RDATA');
@@ -423,10 +479,10 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
                 exponentOffset = 3;
             }
             const modulusOffset = exponentOffset + exponentLength;
-            if (modulusOffset + 4 > msg.key.length) {
+            if (modulusOffset + 3 > msg.key.length) {
                 return malformed('DNSKEY');
             }
-            keyTag = msg.key.readUInt16BE(msg.key.length - 4);
+            keyTag = msg.key.readUInt16BE(msg.key.length - 3);
         } else {
             const rdata = Buffer.alloc(4 + msg.key.length);
             rdata.writeUInt16BE(msg.flags, 0);
@@ -458,8 +514,8 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
             return malformed('NSEC3');
         }
         const rrtypes = replaceUnknownRrTypeList(msg.rrtypes);
-        displayData = `algorithm: ${msg.algorithm}, flags: ${msg.flags}, iterations: ${msg.iterations}, salt: ${msg.salt.toString('base64')}, `
-        displayData += `nextDomain: ${msg.nextDomain.toString('base64')}, rrtypes: ${rrtypes.join(' ')}`;
+        displayData = `algorithm: ${msg.algorithm}, flags: ${msg.flags}, iterations: ${msg.iterations}, salt: ${msg.salt.toString('hex') || '-'}, `
+        displayData += `nextDomain: ${encodeBase32Hex(msg.nextDomain)}, rrtypes: ${rrtypes.join(' ')}`;
     } else if (type === 'RRSIG') {
         if (!hasFields(msg, ['typeCovered', 'algorithm', 'labels', 'originalTTL', 'expiration', 'inception', 'keyTag', 'signersName', 'signature']) ||
             !Buffer.isBuffer(msg.signature)) {
@@ -532,23 +588,35 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
             if (len > 63 || startOffset + len > msg.length) {
                 return escapeHtml('malformed SVCB/HTTPS TargetName');
             }
-            const label = msg.toString('utf8', startOffset, startOffset + len);
+            const label = formatDnsOctets(msg.subarray(startOffset, startOffset + len), '.');
             labels.push(label);
             startOffset += len;
         }
         if (!targetNameTerminated) {
             return escapeHtml('malformed SVCB/HTTPS TargetName');
         }
+        if (startOffset - 2 > 255) {
+            return malformed('SVCB/HTTPS TargetName');
+        }
         const domainName = labels.length === 0 ? '.' : labels.join('.') + '.';
 
         offset += startOffset - offset;
         let paramString = '';
+        const paramNames = ['mandatory', 'alpn', 'no-default-alpn', 'port', 'ipv4hint', 'ech', 'ipv6hint', 'dohpath'];
+        const paramKeys = new Set();
+        const mandatoryKeys = [];
+        let previousParamKey = -1;
         while (offset < msg.length) {
             if (offset + 4 > msg.length) {
                 return escapeHtml('malformed SVCB/HTTPS SvcParam');
             }
             const paramKey = msg.readUInt16BE(offset);
             offset += 2;
+            if (paramKey <= previousParamKey || paramKey === 65535) {
+                return malformed('SVCB/HTTPS SvcParamKey');
+            }
+            previousParamKey = paramKey;
+            paramKeys.add(paramKey);
             const paramLen = msg.readUInt16BE(offset);
             offset += 2;
             if (offset + paramLen > msg.length) {
@@ -557,19 +625,48 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
             const paramValBuffer = msg.subarray(offset, offset + paramLen);
             offset += paramLen;
             switch (paramKey) {
+                case 0:
+                    if (paramValBuffer.length === 0 || paramValBuffer.length % 2 !== 0) {
+                        return malformed('SVCB/HTTPS mandatory SvcParam');
+                    }
+                    for (let i = 0; i < paramValBuffer.length; i += 2) {
+                        const key = paramValBuffer.readUInt16BE(i);
+                        if (key === 0 || key === 65535 ||
+                            (mandatoryKeys.length > 0 && key <= mandatoryKeys[mandatoryKeys.length - 1])) {
+                            return malformed('SVCB/HTTPS mandatory SvcParam');
+                        }
+                        mandatoryKeys.push(key);
+                    }
+                    paramString += `mandatory=${mandatoryKeys.map(key => paramNames[key] || `key${key}`).join(',')}, `;
+                    break;
                 case 1: // Additional supported protocols (文字列のリストであり各文字列の前に 1バイトの長さ)
+                    if (paramValBuffer.length === 0) {
+                        return malformed('SVCB/HTTPS ALPN SvcParam');
+                    }
                     const alpnList = [];
                     let idx = 0;
                     while (idx < paramValBuffer.length) {
                         const len = paramValBuffer[idx];
                         idx += 1;
-                        if (idx + len > paramValBuffer.length) {
+                        if (len === 0 || idx + len > paramValBuffer.length) {
                             return escapeHtml('malformed SVCB/HTTPS ALPN SvcParam');
                         }
-                        alpnList.push(paramValBuffer.toString('utf8', idx, idx + len));
+                        // RFC 9460 Appendix A: list escaping precedes character-string escaping.
+                        const alpnValue = [];
+                        for (const byte of paramValBuffer.subarray(idx, idx + len)) {
+                            if (byte === 44 || byte === 92) alpnValue.push(92);
+                            alpnValue.push(byte);
+                        }
+                        alpnList.push(formatDnsOctets(Buffer.from(alpnValue)));
                         idx += len;
                     }
                     paramString += `alpn=${alpnList}, `;
+                    break;
+                case 2:
+                    if (paramValBuffer.length !== 0) {
+                        return malformed('SVCB/HTTPS no-default-alpn SvcParam');
+                    }
+                    paramString += 'no-default-alpn, ';
                     break;
                 case 3: // Port for alternative endpoint (2バイトの整数)
                     if (paramValBuffer.length !== 2) {
@@ -578,7 +675,7 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
                     paramString += `port=${paramValBuffer.readUInt16BE(0)}, `;
                     break;
                 case 4: // IPv4 address hints (4バイトの整数のリスト)
-                    if (paramValBuffer.length % 4 !== 0) {
+                    if (paramValBuffer.length === 0 || paramValBuffer.length % 4 !== 0) {
                         return escapeHtml('malformed SVCB/HTTPS ipv4hint SvcParam');
                     }
                     let ipv4List = [];
@@ -595,10 +692,10 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
                     paramString += `ipv4hint=${ipv4List}, `;
                     break;
                 case 5: // TLS Encrypted ClientHello Config
-                    paramString += `ech=${paramValBuffer.toString('hex')}, `;
+                    paramString += `ech=${paramValBuffer.toString('base64')}, `;
                     break;
                 case 6: // IPv6 address hints (16バイトの整数のリスト)
-                    if (paramValBuffer.length % 16 !== 0) {
+                    if (paramValBuffer.length === 0 || paramValBuffer.length % 16 !== 0) {
                         return escapeHtml('malformed SVCB/HTTPS ipv6hint SvcParam');
                     }
                     let ipv6List = [];
@@ -619,6 +716,10 @@ const decodeResourceRecord = (type, msg, formatSoaMname = escapeHtml) => {
                 default: // その他は Hexで表示
                     paramString += `other(${paramKey})=${paramValBuffer.toString('hex')}, `;
             }
+        }
+        if (priority > 0 && (mandatoryKeys.some(key => !paramKeys.has(key)) ||
+            (paramKeys.has(2) && !paramKeys.has(1)))) {
+            return malformed('SVCB/HTTPS SvcParam self-consistency');
         }
         if (paramString.length > 2) {
             paramString = paramString.slice(0, -2);
@@ -970,6 +1071,10 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                             const optionData = Buffer.isBuffer(option.data) ? option.data : Buffer.from(option.data || '');
                             const optionName = escapeHtml(option.type || `OPTION_${option.code}`);
                             const optionHex = escapeHtml(optionData.toString('hex'));
+                            if (getEdnsOptionDataError(option)) {
+                                optionItems.push(`<li><strong>EDNS Option</strong><code>${optionName} (${escapeHtml(option.code)}): ${optionHex || '(empty)'}</code></li>`);
+                                continue;
+                            }
                             if (option.code === 3) {
                                 nsidFound = true;
                                 nsidString = `text: ${escapeHtml(optionData.toString('utf8'))}, hex: ${optionData.toString('hex')}`;
@@ -1055,11 +1160,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
                                 const responseTypes = new Set();
                                 for (let offset = 0; offset < buffer.length; offset += 2) {
                                     const type = buffer.readUInt16BE(offset);
-                                    if (responseTypes.has(type) || type === primaryTypeCode || type === 0 || (type >= 128 && type <= 255)) {
+                                    if (responseTypes.has(type) || type === primaryTypeCode || type === 0 || type === 41 ||
+                                        type === 65535 || (type >= 128 && type <= 255)) {
                                         mQTypeResponseInvalid = true;
                                     }
                                     responseTypes.add(type);
-                                    mQTypeString += `${dnsTypes.toString(type)},`;
+                                    mQTypeString += `${replaceUnknownRrTypeToKnown(dnsTypes.toString(type))},`;
                                 }
                                 if (mQTypeString !== '') {
                                     mQTypeString = mQTypeString.slice(0, -1);
@@ -1131,11 +1237,12 @@ const makeHtmlFromDns = (response, bytesRead, origin, pathname, dnsServer, dnsSe
         html += wrapSectionNoticeHtml('<p style="color: #E65C00; margin: 0;">追加の情報は見つかりませんでした。</p>');
     }
 
-    const warningHtml = getOptPseudoSectionStatusHtml(response, rawBuf);
+    const tcpFramed = (sendTcp || sendDot) && !sendHttps;
+    const warningHtml = getOptPseudoSectionStatusHtml(response, rawBuf && tcpFramed ? rawBuf.subarray(2) : rawBuf);
     if (warningHtml) {
         html += buildWarningSectionHtml(warningHtml);
     }
-    const packetWarning = rawBuf ? analyzeDnsPacketError(rawBuf, null, (sendTcp || sendDot) && !sendHttps) : '';
+    const packetWarning = rawBuf ? analyzeDnsPacketError(rawBuf, null, tcpFramed) : '';
     if (packetWarning) {
         html += buildWarningSectionHtml(packetWarning);
     }

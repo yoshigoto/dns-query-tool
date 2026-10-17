@@ -26,6 +26,17 @@ https://www.on-link.jp/dns-query-tool/
 
 SSHFP レコードは dns-packet が返す `hash` と16進文字列の `fingerprint` を使用し、ハッシュ種別を `fpType`（SHA-1 / SHA-256）、フィンガープリントを小文字の16進表記で表示します。
 
+独自解析部分の表示は次の仕様に従います。
+
+- NSEC3 / NSEC3PARAM の `salt` は16進表記（空なら `-`）、NSEC3 の `nextDomain` はパディングなしの Base32hex で表示します（[RFC 5155 §3.3 / §4.3](https://www.rfc-editor.org/rfc/rfc5155.html#section-3.3)）。
+- DNSKEY の Key Tag は [RFC 4034 Appendix B](https://www.rfc-editor.org/rfc/rfc4034.html#appendix-B) で計算し、RSA/MD5（アルゴリズム1）には modulus の下位24ビットのうち上位16ビットを使います。
+- SVCB / HTTPS の `ech` は Base64 で表示します（[RFC 9848 §3](https://www.rfc-editor.org/rfc/rfc9848.html#section-3)）。キーの重複・順序違反、空の ALPN / IP hint、不正な `mandatory` / `no-default-alpn` は `malformed` と表示します（[RFC 9460](https://www.rfc-editor.org/rfc/rfc9460.html)）。未知のパラメーターは引き続き16進表記で表示します。
+- CO フラグおよび NSEC の `NXNAME` は [RFC 9824](https://www.rfc-editor.org/rfc/rfc9824.html) に対応します。
+- Extended RCODE は OPT の上位8ビットとヘッダーの下位4ビットを合成します（[RFC 6891 §6.1.3](https://www.rfc-editor.org/rfc/rfc6891.html#section-6.1.3)）。合成後の RCODE 16 は `BADVERS` とし、TSIG の Error フィールドで使う `BADSIG` とは区別します。エラーコードだけを理由に OPT を破損とは判定しません。
+- ECS / Cookie / EDE の形式不正は、元のデータを16進表記で残して `WARNING SECTION` に表示します（[RFC 7871](https://www.rfc-editor.org/rfc/rfc7871.html)、[RFC 7873](https://www.rfc-editor.org/rfc/rfc7873.html)、[RFC 8914](https://www.rfc-editor.org/rfc/rfc8914.html)）。
+
+これは応答内容の解析・表示であり、DNSSEC の署名検証や SVCB 接続先の選択を行うものではありません。MQTYPE のテスト用クエリー生成で意図的に緩和している制限は維持し、応答側では Meta-TYPE / 予約値・重複などを検査します。
+
 ## 使い方
 
 1. 「対象ドメイン名」に問い合わせたいドメイン名を入力します。

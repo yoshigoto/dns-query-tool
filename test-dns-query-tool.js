@@ -26,6 +26,276 @@ const {
     validateMQType
 } = require('./dns-query-tool');
 
+const renderWireResponse = (fields) => {
+    const raw = dnsPacket.encode({
+        type: 'response', id: 100, flags: 0,
+        questions: [{ name: 'example.com', type: 'A' }],
+        answers: [], authorities: [], additionals: [],
+        ...fields
+    });
+    return makeHtmlFromDns(dnsPacket.decode(raw), raw.length, 'http://localhost:3000', '/api/query',
+        '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+        false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A', raw);
+};
+
+test('RFC 5155 の NSEC3/NSEC3PARAM 表示は hex salt と unpadded base32hex を使う', () => {
+    const vectors = [
+        ['f', 'CO'], ['fo', 'CPNG'], ['foo', 'CPNMU'],
+        ['foob', 'CPNMUOG'], ['fooba', 'CPNMUOJ1'], ['foobar', 'CPNMUOJ1E8']
+    ];
+    for (const section of ['answers', 'authorities', 'additionals']) {
+        for (const [text, encoded] of vectors) {
+            for (const salt of [Buffer.alloc(0), Buffer.from('aabb', 'hex')]) {
+                const html = renderWireResponse({
+                    [section]: [
+                        {
+                            name: 'example.com', type: 'NSEC3', ttl: 300,
+                            data: {
+                                algorithm: 253, flags: 0, iterations: 2, salt,
+                                nextDomain: Buffer.from(text), rrtypes: ['A', 'UNKNOWN_65']
+                            }
+                        },
+                        {
+                            name: 'example.com', type: 'NSEC3PARAM', ttl: 300,
+                            data: Buffer.concat([Buffer.from([1, 0, 0, 2, salt.length]), salt])
+                        }
+                    ]
+                });
+                const saltText = salt.length === 0 ? '-' : 'aabb';
+                assert.ok(html.includes(`salt: ${saltText}, nextDomain: ${encoded}, rrtypes: A HTTPS`));
+                assert.ok(html.includes(`iterations: 2, salt: ${saltText}</code>`));
+                assert.doesNotMatch(html, /malformed/);
+            }
+        }
+    }
+});
+
+test('RFC 4034 Appendix B.1 の RSA/MD5 Key Tag は modulus の末尾3バイトの上位16ビット', () => {
+    for (const exponent of [Buffer.from([1, 3]), Buffer.from([0, 0, 1, 3])]) {
+        for (const modulus of [Buffer.from([0x12, 0x34, 0x56]), Buffer.from([0x7f, 0x12, 0x34, 0x56])]) {
+            const html = renderWireResponse({
+                answers: [{
+                    name: 'example.com', type: 'DNSKEY', ttl: 300,
+                    data: { flags: 256, algorithm: 1, key: Buffer.concat([exponent, modulus]) }
+                }]
+            });
+            assert.match(html, /keyTag: 4660, flags: 256, protocol: 3, algorithm: 1/);
+            assert.doesNotMatch(html, /malformed/);
+        }
+    }
+});
+
+test('RFC 6891 の Extended RCODE は上位8ビットであり破損状態を意味しない', () => {
+    for (const [extendedRcode, flags, expected] of [[1, 0, 'BADVERS'], [1, 6, 'BADTRUNC'], [22, 2, 'RCODE_354']]) {
+        const html = renderWireResponse({
+            flags,
+            additionals: [{ type: 'OPT', name: '.', extendedRcode, udpPayloadSize: 1232, options: [] }]
+        });
+        assert.ok(html.includes(`<dt>応答ステータス (rcode)</dt><dd><code>${expected}</code>`));
+        assert.doesNotMatch(html, /OPT疑似セクションとして破損|BADSIG|WARNING SECTION/);
+        if (extendedRcode === 22) assert.doesNotMatch(html, /BADTRUNC/);
+    }
+});
+
+test('RFC 9824 の CO ビットと NXNAME を表示する', () => {
+    const html = renderWireResponse({
+        authorities: [{
+            name: 'example.com', type: 'NSEC', ttl: 300,
+            data: { nextDomain: 'next.example.com', rrtypes: ['NSEC', 'RRSIG', 'UNKNOWN_128'] }
+        }],
+        additionals: [{ type: 'OPT', name: '.', flags: 0x4000, udpPayloadSize: 1232, options: [] }]
+    });
+    assert.match(html, /rrtypes: RRSIG NSEC NXNAME/);
+    assert.match(html, /title="Compact Answers OK">CO<\/span>/);
+    assert.doesNotMatch(html, /title="DNSSEC OK">DO<\/span>/);
+});
+
+test('RFC 9460/9848 の SVCB/HTTPS パラメーターを全セクションで表示する', () => {
+    const param = (key, data) => {
+        const header = Buffer.alloc(4);
+        header.writeUInt16BE(key, 0);
+        header.writeUInt16BE(data.length, 2);
+        return Buffer.concat([header, data]);
+    };
+    const rdata = Buffer.concat([
+        Buffer.from([0, 1, 0]),
+        param(0, Buffer.from([0, 1, 0, 5])),
+        param(1, Buffer.from([2, 104, 50, 2, 104, 51])),
+        param(2, Buffer.alloc(0)),
+        param(3, Buffer.from([0x20, 0xfb])),
+        param(4, Buffer.from([192, 0, 2, 1, 192, 0, 2, 2])),
+        param(5, Buffer.from('0006ffff00020102', 'hex')),
+        param(6, Buffer.from('20010db800000000000000000000000120010db8000000000000000000530001', 'hex')),
+        param(7, Buffer.from('/dns-query{?dns}')),
+        param(65400, Buffer.from([0xaa, 0xbb]))
+    ]);
+    for (const section of ['answers', 'authorities', 'additionals']) {
+        for (const type of ['UNKNOWN_64', 'UNKNOWN_65']) {
+            const html = renderWireResponse({ [section]: [{ name: 'example.com', type, ttl: 300, data: rdata }] });
+            assert.ok(html.includes('priority: 1, targetName: ., params: [ mandatory=alpn,ech, alpn=h2,h3, no-default-alpn, port=8443, ipv4hint=192.0.2.1,192.0.2.2, ech=AAb//wACAQI=, ipv6hint=2001:db8::1,2001:db8::53:1, dohpath=/dns-query{?dns}, other(65400)=aabb ]'));
+            assert.doesNotMatch(html, /malformed/);
+        }
+    }
+});
+
+test('RFC 9460 に違反する SVCB のキー順序、空値、mandatory を検出する', () => {
+    const invalidParams = [
+        '0003000201bb00010003026832',
+        '0003000201bb0003000201bb',
+        'ffff0000',
+        '00010000',
+        '0001000100',
+        '00040000',
+        '00060000',
+        '0002000100',
+        '00020000',
+        '00000000',
+        '0000000101',
+        '000000020000',
+        '0000000400030003',
+        '0000000400050003',
+        '000000020003',
+        '00000002ffff'
+    ];
+    for (const params of invalidParams) {
+        const html = renderWireResponse({
+            answers: [{
+                name: 'example.com', type: 'UNKNOWN_64', ttl: 300,
+                data: Buffer.concat([Buffer.from([0, 1, 0]), Buffer.from(params, 'hex')])
+            }]
+        });
+        assert.match(html, /malformed SVCB\/HTTPS/, params);
+    }
+});
+
+test('RFC 9460 の ALPN と TargetName は任意のオクテットを失わずに表示する', () => {
+    const html = renderWireResponse({
+        answers: [{
+            name: 'example.com', type: 'UNKNOWN_65', ttl: 300,
+            data: Buffer.from([
+                0, 1, 3, 97, 46, 255, 0,
+                0, 1, 0, 5, 4, 104, 44, 92, 255
+            ])
+        }]
+    });
+    assert.ok(html.includes('targetName: a\\046\\255.'));
+    assert.ok(html.includes('alpn=h\\092,\\092\\092\\255'));
+    assert.doesNotMatch(html, /malformed|\ufffd/);
+});
+
+test('RFC 1035 の名前長上限を超えた SVCB TargetName は不正とする', () => {
+    for (const lastLabelLength of [61, 63]) {
+        const labels = [63, 63, 63, lastLabelLength].map(length =>
+            Buffer.concat([Buffer.from([length]), Buffer.alloc(length, 97)]));
+        const html = renderWireResponse({
+            answers: [{
+                name: 'example.com', type: 'UNKNOWN_64', ttl: 300,
+                data: Buffer.concat([Buffer.from([0, 1]), ...labels, Buffer.from([0])])
+            }]
+        });
+        if (lastLabelLength === 63) assert.match(html, /malformed SVCB\/HTTPS TargetName/);
+        else assert.doesNotMatch(html, /malformed/);
+    }
+});
+
+test('RFC 7871/7873/8914 の不正な EDNS データは raw 表示し警告する', () => {
+    const cases = [
+        [8, '00012100c0000200', 'ECS'],
+        [8, '00011821c00002', 'ECS'],
+        [8, '00011900c0000201', 'ECS'],
+        [8, '00011800c0000200', 'ECS'],
+        [8, '00011800c000', 'ECS'],
+        [10, '00'.repeat(7), 'Cookie'],
+        [10, '00'.repeat(9), 'Cookie'],
+        [10, '00'.repeat(15), 'Cookie'],
+        [10, '00'.repeat(41), 'Cookie'],
+        [15, '00', 'EDE']
+    ];
+    for (const [code, hex, name] of cases) {
+        const html = renderWireResponse({
+            additionals: [{ type: 'OPT', name: '.', options: [{ code, data: Buffer.from(hex, 'hex') }] }]
+        });
+        assert.ok(html.includes(`(${code}): ${hex}</code>`));
+        assert.ok(html.includes(`malformed ${name} OPTION-DATA`), `${name}: ${hex}`);
+        assert.match(html, /WARNING SECTION/);
+        assert.ok(!html.includes(`<strong>${name}</strong>`));
+    }
+});
+
+test('RFC 7871/7873 の有効な境界値と IPv6 ECS を表示する', () => {
+    for (const length of [8, 16, 40]) {
+        const html = renderWireResponse({
+            additionals: [{
+                type: 'OPT', name: '.', options: [
+                    { code: 10, data: Buffer.alloc(length, 0xab) },
+                    { code: 8, data: Buffer.from('00020000', 'hex') },
+                    { code: 8, data: Buffer.from('0002394020010db800000080', 'hex') }
+                ]
+            }]
+        });
+        assert.match(html, /<strong>Cookie<\/strong>/);
+        assert.match(html, /sourcePrefix: 0, scopePrefix: 0, address: ::/);
+        assert.match(html, /sourcePrefix: 57, scopePrefix: 64, address: 2001:db8:0:80::/);
+        assert.doesNotMatch(html, /WARNING SECTION|malformed/);
+    }
+});
+
+test('RFC 8914/7830 の EDE と任意の Padding データを表示する', () => {
+    const html = renderWireResponse({
+        flags: 2,
+        additionals: [{
+            type: 'OPT', name: '.', options: [
+                { code: 15, data: Buffer.from([0, 22]) },
+                { code: 15, data: Buffer.concat([Buffer.from([0, 35]), Buffer.from('<blocked>')]) },
+                { code: 15, data: Buffer.from([0xfd, 0xe8]) },
+                { code: 12, data: Buffer.from([0xff, 0x01]) }
+            ]
+        }]
+    });
+    assert.match(html, /22 \(<a[^>]+>No Reachable Authority<\/a>\)/);
+    assert.match(html, /35 \(<a[^>]+>Blocked by Upstream DNS Server<\/a>\): \(&lt;blocked&gt;\)/);
+    assert.match(html, /65000 \(Unknown Error\)/);
+    assert.match(html, /Padding<\/strong><code>length: 2 bytes/);
+    assert.doesNotMatch(html, /WARNING SECTION|BADTRUNC|<blocked>/);
+});
+
+test('OPT の生データ検査は UDP/DoH と TCP/DoT のフレーミングを区別する', () => {
+    for (const malformed of [false, true]) {
+        const raw = dnsPacket.encode({
+            type: 'response', id: 100,
+            questions: [{ name: 'example.com', type: 'A' }],
+            additionals: [{ type: 'OPT', name: '.', options: [{ code: 65001, data: Buffer.from([0xaa]) }] }]
+        });
+        if (malformed) raw.writeUInt16BE(2, raw.length - 3);
+        for (const [sendTcp, sendDot, sendHttps] of [[false, false, false], [true, false, false], [false, true, false], [true, false, true]]) {
+            const tcpFramed = (sendTcp || sendDot) && !sendHttps;
+            const prefix = Buffer.alloc(2);
+            prefix.writeUInt16BE(raw.length);
+            const received = tcpFramed ? Buffer.concat([prefix, raw]) : raw;
+            const html = makeHtmlFromDns(dnsPacket.decode(raw), received.length, 'http://localhost:3000', '/api/query',
+                '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
+                false, false, sendTcp, false, sendHttps, '', true, false, '1232', false, '', false, 255, 'A', received, 'IN', sendDot);
+            if (malformed) assert.match(html, /OPTION-LENGTH.*RDATA の残り長さ.*超過/);
+            else assert.doesNotMatch(html, /WARNING SECTION|破損/);
+        }
+    }
+});
+
+test('RFC 10029 の MQTYPE-Response では OPT と予約値を不正とし既知タイプ名を表示する', () => {
+    for (const [code, invalid] of [[41, true], [65535, true], [64, false], [65, false]]) {
+        const data = Buffer.alloc(2);
+        data.writeUInt16BE(code);
+        const html = renderWireResponse({
+            additionals: [{ type: 'OPT', name: '.', options: [{ code: 21, data }] }]
+        });
+        if (invalid) assert.match(html, /RFC 10029 の形式に適合していません/);
+        else {
+            assert.match(html, /MQTYPE-Response<\/strong><code>(SVCB|HTTPS)<\/code>/);
+            assert.doesNotMatch(html, /RFC 10029 の形式に適合していません/);
+        }
+    }
+});
+
 test('DNSサーバーとUDPサイズの入力検証', () => {
     assert.equal(isInvalidDnsServer('localhost'), true);
     assert.equal(isInvalidDnsServer('127.0.0.1'), true);
@@ -285,7 +555,8 @@ test('OPTのExtended RCODEを通常のRCODEと合成して表示する', () => {
 
     assert.match(html, /OPT PSEUDOSECTION <span class="section-count">1 項目<\/span>/);
     assert.match(html, /<dt>応答ステータス \(rcode\)<\/dt><dd><code>BADVERS<\/code><\/dd>/);
-    assert.match(html, /Extended RCODE: 1 \(BADVERS \/ BADSIG\)/);
+    assert.match(html, /Extended RCODE: 1 \(BADVERS\)/);
+    assert.doesNotMatch(html, /BADSIG/);
 });
 
 test('Extended RCODEの略称をヘッダーRCODEと合成して判定する', () => {
@@ -408,10 +679,10 @@ test('OPT疑似セクションが一般的に破損している場合を表示�
 });
 
 test('WARNING SECTIONを最後に出して、構造は解釈できるが異常な応答を示す', () => {
-    const html = makeHtmlFromDns({
+    const raw = dnsPacket.encode({
+        type: 'response',
         id: 100,
-        flags: 0,
-        rcode: 'SERVFAIL',
+        flags: 2,
         questions: [{ name: 'rdata-opt-truncated.anomaly.test.ldns.jp', type: 'A' }],
         answers: [],
         authorities: [],
@@ -419,21 +690,16 @@ test('WARNING SECTIONを最後に出して、構造は解釈できるが異常�
             type: 'OPT',
             name: '.',
             udpPayloadSize: 512,
-            extendedRcode: 22,
             flags: dnsPacket.DNSSEC_OK,
-            options: [{
-                code: 15,
-                data: Buffer.concat([
-                    Buffer.from([0, 22]),
-                    Buffer.from('At delegation anomaly.test.ldns.jp for rdata-opt-truncated.anomaly.test.ldns.jp/a')
-                ])
-            }]
+            options: [{ code: 65001, data: Buffer.from([0xaa]) }]
         }]
-    }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 100,
-    true, false, false, false, false, '', '1232', false, '', false, 255, 'A');
+    });
+    raw.writeUInt16BE(2, raw.length - 3);
+    const html = makeHtmlFromDns(dnsPacket.decode(raw), raw.length, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 100,
+    true, false, false, false, false, '', true, false, '1232', false, '', false, 255, 'A', raw);
 
     assert.match(html, /WARNING SECTION/);
-    assert.match(html, /BADTRUNC|本来の姿から乖離/);
+    assert.match(html, /OPTION-LENGTH.*RDATA の残り長さ.*超過/);
     assert.ok(html.lastIndexOf('WARNING SECTION') > html.lastIndexOf('OPT PSEUDOSECTION'));
 });
 
@@ -1042,7 +1308,7 @@ test('Opcode, QR(0), Reserved(Z) フラグを解析・表示する', () => {
 
 test('EDNS Option の ECS, Cookie, Padding をデコード表示する', () => {
     const ecsIPv4Data = Buffer.from([0x00, 0x01, 24, 0, 192, 0, 2]);
-    const cookieData = Buffer.from('123456788765432100000000', 'hex');
+    const cookieData = Buffer.from('12345678876543210000000000000000', 'hex');
     const paddingData = Buffer.alloc(10);
 
     const html = makeHtmlFromDns({
@@ -1067,7 +1333,7 @@ test('EDNS Option の ECS, Cookie, Padding をデコード表示する', () => {
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /<strong>ECS<\/strong><code>family: 1 \(IPv4\), sourcePrefix: 24, scopePrefix: 0, address: 192\.0\.2\.0<\/code>/);
-    assert.match(html, /<strong>Cookie<\/strong><code>Client Cookie: 1234567887654321, Server Cookie: 00000000<\/code>/);
+    assert.match(html, /<strong>Cookie<\/strong><code>Client Cookie: 1234567887654321, Server Cookie: 0000000000000000<\/code>/);
     assert.match(html, /<strong>Padding<\/strong><code>length: 10 bytes<\/code>/);
 });
 
@@ -1273,7 +1539,7 @@ test('SPF, NSEC3PARAM, CDS, CDNSKEY の生 RDATA をデコード表示する', (
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /<span class="rr-type rr-type-answer">SPF<\/span>.*?strings: abcde/s);
-    assert.match(html, /<span class="rr-type rr-type-answer">NSEC3PARAM<\/span>.*?algorithm: 1, flags: 0, iterations: 2, salt: qrs=/s);
+    assert.match(html, /<span class="rr-type rr-type-answer">NSEC3PARAM<\/span>.*?algorithm: 1, flags: 0, iterations: 2, salt: aabb/s);
     assert.match(html, /<span class="rr-type rr-type-answer">CDS<\/span>.*?keyTag: 4660, algorithm: 8, digestType: 2, digest: dead/s);
     assert.match(html, /<span class="rr-type rr-type-answer">CDNSKEY<\/span>.*?flags: 256, protocol: 3, algorithm: 13, key: AQID/s);
 });
@@ -1294,7 +1560,7 @@ test('DNSKEY の Key Tag を flags より前に表示する', () => {
     false, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
     assert.match(html, /keyTag: 2063, flags: 256, protocol: 3, algorithm: 13, key: AQID/);
-    assert.match(html, /keyTag: 772, flags: 256, protocol: 3, algorithm: 1, key: AQMBAgMEBQY=/);
+    assert.match(html, /keyTag: 1029, flags: 256, protocol: 3, algorithm: 1, key: AQMBAgMEBQY=/);
 });
 
 test('SVCB の不正な SvcParam 長を malformed として表示する', () => {
