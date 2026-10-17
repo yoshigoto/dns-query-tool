@@ -35,6 +35,43 @@ SOA レコードの `mname` は、そのゾーンのプライマリサーバー�
 
 フルサービスリゾルバーに名前解決を任せる場合は、問い合わせ先にフルサービスリゾルバーを指定し、「RD」にチェックを入れてください。
 
+### dig コマンド形式で入力する
+
+通常のフォームとは別に、`dig.html`（ローカルでは `http://127.0.0.1:3000/dig.html` または `http://127.0.0.1:3000/dns-query-tool/dig.html`）で dig コマンド、または引数だけを入力できます。通常画面からも移動できます。
+
+```text
+dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec
+dig @8.8.8.8 example.com -t AAAA +tcp +nsid +bufsize=1232
+delv @a.root-servers.net www.on-link.jp +qmin +nord
+```
+
+最初の例は IN / A、サーバー `a.root-servers.net`、対象名 `www.on-link.jp`、IPv6優先・RD・CD・DO On（EDNS0もOn）に変換します。コマンドそのものをOSで実行することはありません。既存の `api/query` でDNS送信・応答解析を行います。
+
+| dig / delv 引数 | 本ツールの設定 |
+| --- | --- |
+| `@server`、`name`、`type`、`class` | サーバー、対象名、タイプ、クラス（順不同・大文字小文字不問のタイプ/クラス） |
+| `-q name`、`-t type`、`-c class` | 対象名、タイプ、クラス（`-tAAAA` のような連結形式も可） |
+| `-x address` | `PTR-x` によるIPv4/IPv6逆引き |
+| `-4` / `-6` | IPv4 / IPv6優先（digの通信ファミリー固定とは異なります） |
+| `+[no]rd` / `+[no]recurse` | RD |
+| `+[no]cd` / `+[no]cdflag` | CD |
+| `+[no]dnssec`、`+[no]nsid` | DO、NSID（有効化時はEDNS0もOn） |
+| `+edns[=0]` / `+noedns`、`+bufsize=N` | EDNS0、UDPサイズ512～65535（サイズ指定時はEDNS0もOn） |
+| `+[no]tcp` / `+[no]vc` | TCP |
+| `+[no]tls`、`+[no]https[=/path]` | DoT、DoH (POST)。本ツールでは証明書を検証します |
+| `ixfr=N` | IXFRとSOA SERIAL。AXFR/IXFRは既定でTCP（`+notcp` で解除可能） |
+| `+[no]qmin` | delv形式の指定を既存のQNAME minimisationへ対応付け。委任を辿る操作は手動 |
+
+省略時は IN、A（対象名も省略した場合は `. NS`）、RD・EDNS0 On、UDPサイズ1232です。サーバーは本ツール既定の `a.root-servers.net` とし、OSのリゾルバー設定や `.digrc` は使用しません。それ以外の本ツール独自機能（MQTYPE、QNAMEタイプ切り替えなど）は自動では追加しません。通常フォームの既定値は変わりません。
+
+受信結果の上に入力コマンドを元の空白・引用符を含めて表示し、無視した引数とその値を赤字・波線で強調します。理由の一覧と、実際に反映されたAPIパラメーターも確認できます。「通常の入力フォームへ」から反映された設定を通常画面で開けます。結果のリンクをクリックした場合も通常画面に移動します。
+
+対応しない引数（`+short`、`+trace`、`+time`、`+retry`、`-p`、`-b`、`-f`、TSIG、EDNS Cookie / ECSなど）は無視します。未対応のクエリータイプ・クラスや範囲外のオプション値も赤字で示し、既定値または直前の有効な指定を使います。値が欠けた `-t` 等や閉じていない引用符、シリアル番号のないIXFRはエラーとして送信を止めます。オプション名の省略形、複数問い合わせ、シェルの変数展開・パイプ・リダイレクト、delvのDNSSEC検証は再現しません。繰り返し指定した設定は原則として後の有効な指定を優先します。
+
+URL・ブラウザー履歴には `dig.html?server=...&name=...&type=...` のように、対応するDNS設定だけを保存します。元の入力コマンドや、無視したオプションとその値（例: `-y` のTSIGキー）は保存・送信しません。再読み込みや履歴からは保存した設定を使ってコマンドを再構成して再送信するため、元の空白・引用符・未対応引数の表示は復元されません。入力直後の画面では引き続き元のコマンドと無視した引数を表示します。
+
+旧形式の `?command=...` URLは自動実行せず、URLから削除して再入力を案内します。ただし、既に記録された過去の履歴・アクセスログ等を削除できるものではありません。鍵を貼り付けたことがある場合は履歴・ログ等を確認し、必要に応じて鍵を更新してください。対応するDNS設定自体はURL・リクエストに含まれるため、対象名・サーバー名・DoHパス等にも機密情報を含めないでください。
+
 ### IXFR のシリアル番号
 
 クエリータイプで `IXFR` を選ぶと「IXFR シリアル番号」欄が表示されます。取得済みゾーンの SOA SERIAL を `0`～`4294967295` の整数で指定してください（必須）。対応する dig の指定方法は `ixfr=N` です。このツールでは `type=IXFR&ixfrserial=N` として URL に保持し、問い合わせの AUTHORITY セクションに指定した SERIAL の SOA レコードを追加します。
@@ -110,10 +147,16 @@ http://127.0.0.1:3000/dns-query-tool/api/query?server=8.8.8.8&name=example.com&t
 | --- | --- |
 | `index.html` | 入力フォーム、説明、結果表示領域 |
 | `dns-query-tool-client.js` | フォーム送信、履歴操作、結果表示、リンクからの再クエリー |
+| `dig.html` | dig形式の入力画面、無視した引数・反映設定・応答の表示 |
+| `dig-command.js` | ブラウザー/Node.js共通のdig引数パーサー |
+| `dig-client.js` | dig画面の送信、引数の色分け、URL・履歴操作 |
+| `dns-query-options.js` | APIとdigパーサーが共有する許可タイプ・クラス |
+| `dns-query-tool.css` | 通常画面とdig画面の共通スタイル |
 | `dns-query-tool.js` | HTTPサーバー、DNSメッセージ生成、UDP/TCP通信、応答解析、HTML生成 |
 | `test-mqtype.js` | MQTYPEオプションの構築と応答解析の簡易テスト |
 | `test-ixfr.js` | IXFRオプションの構築と応答解析の簡易テスト |
 | `test-dns-query-tool.js` | DNSクエリーツール全体の簡易テスト |
+| `test-dig-command.js` | dig引数の解析、静的ファイル配信、DNS送信設定のテスト |
 | `package.json` | Node.js依存関係の定義 |
 
 ## MQTYPEテスト

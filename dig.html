@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>dig形式 - DNSクエリー送信ツール</title>
+    <link rel="stylesheet" href="dns-query-tool.css">
+    <script src="dns-query-options.js" defer></script>
+    <script src="dig-command.js" defer></script>
+    <script src="dig-client.js" defer></script>
+</head>
+<body>
+    <main class="container">
+        <h2>DNSクエリー送信ツール - dig形式</h2>
+        <p><a id="form-link" href="./">通常の入力フォームへ</a></p>
+        <section id="search-panel">
+            <form id="dig-search">
+                <label for="command">dig コマンドまたは引数:</label>
+                <textarea id="command" class="dig-input" rows="3" required autofocus spellcheck="false" autocomplete="off"
+                    placeholder="dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec"></textarea>
+                <button type="submit">DNSメッセージを送信</button>
+            </form>
+        </section>
+        <section class="explanation">
+            <p>コマンドは実行せず、対応する引数だけを本ツールのDNS送信設定へ変換します。
+                未対応の引数と値は赤字・波線で表示し、無視した理由も表示します。</p>
+            <p>URL・履歴には対応するDNS設定だけを保存します。元の入力や無視した引数は保存しません。
+                再読み込み・履歴復元時には設定からコマンドを再構成します。鍵などの機密情報は入力しないでください。</p>
+            <p>既定値: IN、A（対象名省略時は . NS）、RD On、EDNS0 On、UDPサイズ1232、
+                DNSサーバー a.root-servers.net。OSのリゾルバー設定や .digrc は使用しません。</p>
+            <details>
+                <summary>対応オプションと制限</summary>
+                <p>@server、name/type/class（順不同）、-q、-t、-c、-x、-4/-6、
+                    +[no]rd/recurse、+[no]cd/cdflag、+[no]dnssec、+[no]nsid、+[no]tcp/vc、
+                    +[no]tls、+[no]https[=/path]、+edns[=0]/+noedns、+bufsize=N、
+                    ixfr=N、delv の +[no]qmin に対応します。オプション名の省略形には対応しません。</p>
+                <p>-4/-6 は本ツールのIPv4/IPv6優先設定です（digの通信ファミリー固定とは異なります）。
+                    TLS/HTTPSでは証明書を検証します。+qmin は本ツールのQNAME minimisationで、
+                    委任を辿る操作は手動です。DNSSEC検証は行いません。</p>
+                <p>問い合わせは1件のみです。表示形式、+trace、タイムアウト、任意のポート、送信元指定、
+                    TSIG、ファイル入力、未対応のEDNSオプションなどは無視します。
+                    シェルの変数展開、パイプ、リダイレクトは実行しません。</p>
+                <p>結果中のリンクで委任を辿ると、通常の入力フォームに移動します。</p>
+            </details>
+        </section>
+        <section id="dig-summary" aria-live="polite" hidden>
+            <h3>入力されたコマンド</h3>
+            <code id="parsed-command" class="dig-command"></code>
+            <ul id="ignored-options"></ul>
+            <details>
+                <summary>反映された設定（APIパラメーター）</summary>
+                <pre id="parsed-settings" class="dig-settings"></pre>
+            </details>
+        </section>
+        <section id="results" aria-live="polite"></section>
+    </main>
+    <footer>
+        © 2026 <a href="https://x.com/goto_ipv6" target="_blank" rel="noopener noreferrer">Y.Goto</a><br>
+        本ツールは検証・評価目的で提供されています。
+    </footer>
+</body>
+</html>

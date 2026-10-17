@@ -1537,20 +1537,14 @@ const isInvalidHttpsPath = (httpsPath) => {
     return !/^\/[!-~]*$/.test(httpsPath) || httpsPath.length > 512;
 };
 
-const SUPPORTED_QUERY_TYPES = Object.freeze([
-    'A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'PTR', 'PTR-x', 'SRV', 'CAA', 'ANY',
-    'DS', 'DNSKEY', 'RRSIG', 'NSEC', 'NSEC3', 'NSEC3PARAM', 'CDS', 'CDNSKEY', 'TA',
-    'TLSA', 'SSHFP', 'NAPTR', 'CERT', 'IPSECKEY', 'HIP', 'DHCID',
-    'SVCB', 'HTTPS', 'DNAME', 'NULL', 'HINFO', 'RP', 'AFSDB', 'SIG', 'KEY', 'LOC', 'KX', 'APL', 'DLV', 'SPF',
-    'IXFR', 'AXFR'
-]);
+const { SUPPORTED_QUERY_TYPES, SUPPORTED_QUERY_CLASSES } = require('./dns-query-options');
 
 const isInvalidQueryType = (queryType) => {
     return !SUPPORTED_QUERY_TYPES.includes(queryType);
 };
 
 const isInvalidQueryClass = (queryClass) => {
-    return !['IN', 'CS', 'CH', 'HS', 'ANY'].includes(queryClass) || dnsClasses.toClass(queryClass) === 0;
+    return !SUPPORTED_QUERY_CLASSES.includes(queryClass) || dnsClasses.toClass(queryClass) === 0;
 };
 
 const validateDomainName = (name) => {
@@ -2051,6 +2045,11 @@ const handleRequest = async (req, res) => {
     const staticFiles = {
         '/': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
         '/index.html': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
+        '/dig.html': { file: 'dig.html', contentType: 'text/html; charset=utf-8' },
+        '/dns-query-tool.css': { file: 'dns-query-tool.css', contentType: 'text/css; charset=utf-8' },
+        '/dns-query-options.js': { file: 'dns-query-options.js', contentType: 'application/javascript; charset=utf-8' },
+        '/dig-command.js': { file: 'dig-command.js', contentType: 'application/javascript; charset=utf-8' },
+        '/dig-client.js': { file: 'dig-client.js', contentType: 'application/javascript; charset=utf-8' },
         '/dns-query-tool-client.js': { file: 'dns-query-tool-client.js', contentType: 'application/javascript; charset=utf-8' }
     };
     const staticFile = staticFiles[parsedUrl.pathname];
