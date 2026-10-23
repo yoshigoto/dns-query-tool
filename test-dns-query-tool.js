@@ -38,6 +38,48 @@ const renderWireResponse = (fields) => {
         false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A', raw);
 };
 
+test('既知のDNSワイヤデータを解析・表示し、問い合わせのワイヤ形式を検証する', () => {
+    const responseWire = Buffer.from(
+        '1a2b81800001000100000000076578616d706c6503636f6d0000010001c00c000100010000003c0004c0000201',
+        'hex'
+    );
+    const responseFrame = Buffer.concat([Buffer.from([0x00, responseWire.length]), responseWire]);
+    const response = dnsPacket.decode(responseWire);
+
+    assert.equal(response.id, 0x1a2b);
+    assert.equal(response.type, 'response');
+    assert.equal(response.flags, 0x0180);
+    assert.deepEqual(response.questions, [{ name: 'example.com', type: 'A', class: 'IN' }]);
+    assert.deepEqual(response.answers, [{
+        name: 'example.com', type: 'A', class: 'IN', ttl: 60, flush: false, data: '192.0.2.1'
+    }]);
+    assert.deepEqual(dnsPacket.streamDecode(responseFrame), response);
+
+    const html = makeHtmlFromDns(
+        response, responseWire.length, 'http://localhost:3000', '/api/query',
+        '8.8.8.8', '8.8.8.8', 'example.com', 'A', 0x1a2b,
+        false, false, false, false, false, '', false, false, '1232', false, '', false, 255, 'A', responseWire
+    );
+    assert.match(html, /192\.0\.2\.1/);
+
+    const query = {
+        type: 'query',
+        id: 0x1a2b,
+        flags: 0x0100,
+        questions: [{ name: 'example.com', type: 'A', class: 'IN' }]
+    };
+    const queryWire = Buffer.from(
+        '1a2b01000001000000000000076578616d706c6503636f6d0000010001',
+        'hex'
+    );
+
+    assert.deepEqual(dnsPacket.encode(query), queryWire);
+    assert.deepEqual(
+        dnsPacket.streamEncode(query),
+        Buffer.concat([Buffer.from([0x00, queryWire.length]), queryWire])
+    );
+});
+
 test('RFC 5155 の NSEC3/NSEC3PARAM 表示は hex salt と unpadded base32hex を使う', () => {
     const vectors = [
         ['f', 'CO'], ['fo', 'CPNG'], ['foo', 'CPNMU'],
