@@ -1,0 +1,25 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dependency: minimum
+            dns-packet-version: '5.6.1'
+          - dependency: latest-compatible
+            dns-packet-version: '^5.6.1'
+    name: Test dns-packet ${{ matrix.dependency }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm install --no-save --package-lock=false "dns-packet@${{ matrix.dns-packet-version }}"
+      - run: npm test
