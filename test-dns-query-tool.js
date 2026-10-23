@@ -5,6 +5,8 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const dnsPacket = require('dns-packet');
+const dnsTypes = require('dns-packet/types');
+const dnsClasses = require('dns-packet/classes');
 const {
     analyzeDnsPacketError,
     buildDnsFlags,
@@ -78,6 +80,36 @@ test('既知のDNSワイヤデータを解析・表示し、問い合わせの�
         dnsPacket.streamEncode(query),
         Buffer.concat([Buffer.from([0x00, queryWire.length]), queryWire])
     );
+});
+
+test('DNS TYPE・CLASS の固定ワイヤ値を名前とコードの間で変換する', () => {
+    const cases = [
+        { typeCode: 1, classCode: 1, typeName: 'A', className: 'IN', wire: '1a2b01000001000000000000076578616d706c6503636f6d0000010001' },
+        { typeCode: 64, classCode: 3, typeName: 'SVCB', className: 'CH', wire: '1a2b01000001000000000000076578616d706c6503636f6d0000400003' },
+        { typeCode: 65, classCode: 4, typeName: 'HTTPS', className: 'HS', wire: '1a2b01000001000000000000076578616d706c6503636f6d0000410004' },
+        { typeCode: 65280, classCode: 255, typeName: 'UNKNOWN_65280', className: 'ANY', wire: '1a2b01000001000000000000076578616d706c6503636f6d00ff0000ff' }
+    ];
+
+    for (const { typeCode, classCode, typeName, className, wire } of cases) {
+        const packet = Buffer.from(wire, 'hex');
+        const decoded = dnsPacket.decode(packet);
+        assert.equal(decoded.questions[0].type, dnsTypes.toString(typeCode));
+        assert.equal(decoded.questions[0].class, dnsClasses.toString(classCode));
+        assert.equal(getDnsTypeCode(typeName), typeCode);
+        assert.deepEqual(dnsPacket.encode({
+            type: 'query',
+            id: 0x1a2b,
+            flags: 0x0100,
+            questions: [{ name: 'example.com', type: dnsTypes.toString(typeCode), class: dnsClasses.toString(classCode) }]
+        }), packet);
+    }
+
+    assert.equal(getDnsTypeCode('SVCB'), 64);
+    assert.equal(getDnsTypeCode('HTTPS'), 65);
+    for (const queryClass of ['IN', 'CS', 'CH', 'HS', 'ANY']) {
+        assert.equal(isInvalidQueryClass(queryClass), false, queryClass);
+    }
+    assert.equal(isInvalidQueryClass('UNKNOWN_3'), true);
 });
 
 test('RFC 5155 の NSEC3/NSEC3PARAM 表示は hex salt と unpadded base32hex を使う', () => {
