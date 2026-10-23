@@ -275,7 +275,7 @@ test('OPT の生データ検査は UDP/DoH と TCP/DoT のフレーミングを�
             const html = makeHtmlFromDns(dnsPacket.decode(raw), received.length, 'http://localhost:3000', '/api/query',
                 '8.8.8.8', '8.8.8.8', 'example.com', 'A', 100,
                 false, false, sendTcp, false, sendHttps, '', true, false, '1232', false, '', false, 255, 'A', received, 'IN', sendDot);
-            if (malformed) assert.match(html, /OPTION-LENGTH.*RDATA の残り長さ.*超過/);
+            if (malformed) assert.match(html, /OPTION-LENGTH.*RDATA の残りの長さ.*超過/);
             else assert.doesNotMatch(html, /WARNING SECTION|破損/);
         }
     }
@@ -675,7 +675,7 @@ test('OPT疑似セクションが一般的に破損している場合を表示�
     }, 20, 'http://localhost:3000', '/api/query', '8.8.8.8', '8.8.8.8', 'rdata-opt-truncated.anomaly.test.ldns.jp', 'A', 100,
     true, false, false, false, false, '', '1232', false, '', false, 255, 'A');
 
-    assert.match(html, /OPT疑似セクション.*破損|一般的な OPT 疑似セクションとして破損/);
+    assert.match(html, /OPT 疑似セクションとしては破損しています: <code>OPTION コードが不正です<\/code>/);
 });
 
 test('WARNING SECTIONを最後に出して、構造は解釈できるが異常な応答を示す', () => {
@@ -699,7 +699,7 @@ test('WARNING SECTIONを最後に出して、構造は解釈できるが異常�
     true, false, false, false, false, '', true, false, '1232', false, '', false, 255, 'A', raw);
 
     assert.match(html, /WARNING SECTION/);
-    assert.match(html, /OPTION-LENGTH.*RDATA の残り長さ.*超過/);
+    assert.match(html, /OPTION-LENGTH.*RDATA の残りの長さ.*超過/);
     assert.ok(html.lastIndexOf('WARNING SECTION') > html.lastIndexOf('OPT PSEUDOSECTION'));
 });
 
@@ -1687,8 +1687,8 @@ test('rdata-opt-truncated の生パケットで OPTION-LENGTH 超過による WA
     );
 
     assert.match(html, /WARNING SECTION/);
-    assert.match(html, /OPT疑似セクションとして破損しています/);
-    assert.match(html, /OPTION-LENGTH \(16 バイト\) が RDATA の残り長さ \(4 バイト\) を超過しています/);
+    assert.match(html, /OPT 疑似セクションとしては破損しています/);
+    assert.match(html, /OPTION-LENGTH \(16 バイト\) が RDATA の残りの長さ \(4 バイト\) を超過しています/);
 });
 
 test('DNSサーバー解決時に権威サーバー問い合わせでタイムアウトが発生した場合、そのエラーが伝播する', async () => {
