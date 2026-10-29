@@ -28,14 +28,14 @@
             <p>既定値はIN、RD・EDNS0有効、UDPサイズ1232、DNSサーバー <code>a.root-servers.net</code> です。対象名を省略するとルートのNSを問い合わせます。OSのリゾルバー設定や <code>.digrc</code> は使用しません。</p>
             <details>
                 <summary>対応オプションと制限</summary>
-                <p><code>@server</code>、対象名／タイプ／クラス、<code>-q</code>、<code>-t</code>、<code>-c</code>、<code>-x</code>、<code>-4</code>／<code>-6</code>、<code>+[no]rd</code>／<code>+[no]recurse</code>、<code>+[no]cd</code>、<code>+[no]dnssec</code>、<code>+[no]nsid</code>、<code>+[no]tcp</code>／<code>+[no]vc</code>、<code>+[no]tls</code>、<code>+[no]https[=/path]</code>、<code>+edns[=0]</code>／<code>+noedns</code>、<code>+bufsize=N</code>、<code>ixfr=N</code>、<code>+[no]qmin</code>に対応します。タイプやクラスは順不同で指定できます。AXFR／IXFRは既定でTCPを使用します。</p>
+                <p><code>@server</code>、対象名／タイプ／クラス、<code>-q</code>、<code>-t</code>、<code>-c</code>、<code>-x</code>、<code>-4</code>／<code>-6</code>、<code>+[no]rd</code>／<code>+[no]recurse</code>、<code>+[no]cd</code>／<code>+[no]cdflag</code>、<code>+[no]dnssec</code>、<code>+[no]nsid</code>、<code>+[no]tcp</code>／<code>+[no]vc</code>、<code>+[no]tls</code>、<code>+[no]https[=/path]</code>、<code>+edns[=0]</code>／<code>+noedns</code>、<code>+bufsize=N</code>、<code>ixfr=N</code>、<code>+[no]qmin</code>に対応します。タイプやクラスは順不同で指定できます。AXFR／IXFRは既定でTCPを使用します。</p>
                 <p><code>-4</code>／<code>-6</code> は通信ファミリーを固定するのではなく、IPv4／IPv6を優先します。DoT／DoHではTLS証明書を検証します。QNAME minimisationで委任先をたどる操作は手動です。DNSSEC検証は行いません。</p>
                 <p>問い合わせは1件のみです。表示形式、<code>+trace</code>、タイムアウト、任意ポート、送信元アドレス、TSIG、ファイル入力、未対応のEDNSオプションなどは処理しません。シェルの変数展開、パイプ、リダイレクト、オプション名の省略形にも対応しません。</p>
                 <p>応答内のリンクをクリックすると、通常の入力フォームに移動します。</p>
             </details>
         </section>
         <section id="dig-summary" aria-live="polite" hidden>
-            <h3>入力されたコマンド</h3>
+            <h2>入力されたコマンド</h2>
             <code id="parsed-command" class="dig-command"></code>
             <ul id="ignored-options"></ul>
             <details>
