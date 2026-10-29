@@ -1,6 +1,6 @@
 # DNSクエリー送信ツール
 
-Webブラウザからの操作によりDNSクエリーを送信し、受信したDNSメッセージの応答内容を解析して表示するWebアプリケーションです。`dig` や `drill` のような確認を、DNSの委任や各種オプションを意識しながらWebブラウザで行うことができます。
+ブラウザーからDNSクエリーを送信し、応答を解析・表示するWebアプリケーションです。DNSサーバーや通信方式、各種フラグを指定して、権威サーバーやフルサービスリゾルバーの応答を確認できます。
 
 ## 公開サイト
 
@@ -8,52 +8,35 @@ https://www.on-link.jp/dns-query-tool/
 
 ## 主な機能
 
-- DNSサーバー (権威サーバー、フルサービスリゾルバー) を指定したクエリーの送信
-- UDP、TCP、DNS over HTTPS (DoH)、DNS over TLS (DoT) によるDNS通信
-- IPv4またはIPv6を優先したDNSサーバー名の解決
-- 非再帰検索と再帰検索 (RD) の切り替え
-- QNAME minimisation (RFC 7816 / RFC 9156) を模した反復検索 (検索自体は手動 - 後述の「使い方」参照)
-- EDNS0、DNSSEC OK (DO) 、Checking Disabled (CD) 、NSIDの要求
+- DNSサーバー（権威サーバーまたはフルサービスリゾルバー）を指定したクエリー
+- UDP、TCP、DNS over HTTPS（DoH）、DNS over TLS（DoT）による通信
+- DNSサーバー名の解決とクエリー送信におけるIPv4／IPv6の優先設定
+- 再帰検索（RD）、Checking Disabled（CD）、EDNS0、DNSSEC OK（DO）、NSIDの指定
 - UDPメッセージサイズの指定
-- MQTYPE-Query (RFC 10029) の指定と応答表示
-- A、AAAA、MX、NS、SOA、TXT、CNAME、DNSKEY、DS、HTTPS、SVCBなどのレコード表示
-- DNS応答の `ANSWER`、`AUTHORITY`、`ADDITIONAL` セクションの解析
-- TCフラグなどの各種フラグ、応答コード (rcode)、DNSSEC関連情報、Extended DNS Errorの表示
-- 応答に含まれるドメイン名やIPアドレスから、次のクエリーを実行
-- クエリー条件をURLのクエリーパラメーターとして保持
+- QNAME minimisationを使った段階的な問い合わせ（委任を辿る操作は手動）
+- MQTYPE-Query（RFC 10029）の送信と応答表示
+- 各種リソースレコード、応答セクション、フラグ、応答コード（RCODE）、Extended DNS Errorの表示
+- 応答中のドメイン名やIPアドレスから次のクエリーを実行
+- クエリー設定をURLおよびブラウザー履歴に保存
 
-応答の `OPT PSEUDOSECTION` の `Version` には、受信した OPT レコードの EDNS バージョンを表示します。送信クエリーは EDNS0（バージョン0）ですが、応答にバージョン1などが含まれる場合も、その値を表示します。
-
-SSHFP レコードは dns-packet が返す `hash` と16進文字列の `fingerprint` を使用し、ハッシュ種別を `fpType`（SHA-1 / SHA-256）、フィンガープリントを小文字の16進表記で表示します。
-
-独自解析部分の表示は次の仕様に従います。
-
-- NSEC3 / NSEC3PARAM の `salt` は16進表記（空なら `-`）、NSEC3 の `nextDomain` はパディングなしの Base32hex で表示します（[RFC 5155 §3.3 / §4.3](https://www.rfc-editor.org/rfc/rfc5155.html#section-3.3)）。
-- DNSKEY の Key Tag は [RFC 4034 Appendix B](https://www.rfc-editor.org/rfc/rfc4034.html#appendix-B) で計算し、RSA/MD5（アルゴリズム1）には modulus の下位24ビットのうち上位16ビットを使います。
-- SVCB / HTTPS の `ech` は Base64 で表示します（[RFC 9848 §3](https://www.rfc-editor.org/rfc/rfc9848.html#section-3)）。キーの重複・順序違反、空の ALPN / IP hint、不正な `mandatory` / `no-default-alpn` は `malformed` と表示します（[RFC 9460](https://www.rfc-editor.org/rfc/rfc9460.html)）。未知のパラメーターは引き続き16進表記で表示します。
-- CO フラグおよび NSEC の `NXNAME` は [RFC 9824](https://www.rfc-editor.org/rfc/rfc9824.html) に対応します。
-- Extended RCODE は OPT の上位8ビットとヘッダーの下位4ビットを合成します（[RFC 6891 §6.1.3](https://www.rfc-editor.org/rfc/rfc6891.html#section-6.1.3)）。合成後の RCODE 16 は `BADVERS` とし、TSIG の Error フィールドで使う `BADSIG` とは区別します。エラーコードだけを理由に OPT を破損とは判定しません。
-- ECS / Cookie / EDE の形式不正は、元のデータを16進表記で残して `WARNING SECTION` に表示します（[RFC 7871](https://www.rfc-editor.org/rfc/rfc7871.html)、[RFC 7873](https://www.rfc-editor.org/rfc/rfc7873.html)、[RFC 8914](https://www.rfc-editor.org/rfc/rfc8914.html)）。
-
-これは応答内容の解析・表示であり、DNSSEC の署名検証や SVCB 接続先の選択を行うものではありません。MQTYPE のテスト用クエリー生成で意図的に緩和している制限は維持し、応答側では Meta-TYPE / 予約値・重複などを検査します。
+応答内容の解析・表示を行いますが、DNSSEC署名の検証やSVCB／HTTPSレコードに基づく接続先の選択は行いません。解析できないレコードデータは `malformed` と表示する場合があります。
 
 ## 使い方
 
-1. 「対象ドメイン名」に問い合わせたいドメイン名を入力します。
-2. 必要に応じて「クエリー先DNSサーバー」、「クエリータイプ」、「RD」などを変更します。
+1. 対象ドメイン名を入力します。
+2. 必要に応じてDNSサーバー、クエリータイプ、RDなどを設定します。
 3. 「DNSメッセージを送信」をクリックします。
-4. 表示された `ANSWER`、`AUTHORITY`、`ADDITIONAL` の内容を確認します。
+4. `ANSWER`、`AUTHORITY`、`ADDITIONAL` セクションの応答を確認します。
 
-デフォルトでは `a.root-servers.net` を問い合わせ先とする非再帰検索です。委任を辿る場合は、応答として表示されたNSやIPアドレスをクリックして次の問い合わせを行います。
+通常フォームの既定値は、DNSサーバーが `a.root-servers.net`、タイプがA、クラスがIN、RDとEDNS0がオフ、UDPメッセージサイズが1232バイトです。委任を辿るには、応答に表示されたNS名やIPアドレスのリンクをクリックして次の問い合わせを行います。委任先への問い合わせは自動ではありません。
 
-SOA レコードの `mname` は、そのゾーンのプライマリサーバーのドメイン名です。`ANSWER`、`AUTHORITY`、`ADDITIONAL` の各セクションで `mname` のドメイン名をクリックすると、その名前の A レコードをルートサーバーから新たに探索できます。RD、DoH、DoT、MQTYPE は無効になり、QNAME minimisation が有効な場合はラベル位置を初期化します。委任を辿る操作は引き続き手動です。
+SOAレコードの `mname` はプライマリーサーバー名です。これをクリックすると、`a.root-servers.net` からその名前のAレコードを探索できます。このリンクではRD、DoH、DoT、MQTYPEを無効にします。QNAME minimisationが有効な場合は、ラベル位置を初期状態に戻します。
 
-フルサービスリゾルバーに名前解決を任せる場合は、問い合わせ先にフルサービスリゾルバーを指定し、「RD」にチェックを入れてください。
+名前解決をフルサービスリゾルバーに任せる場合は、そのサーバーを指定してRDを有効にしてください。
 
 ### dig コマンド形式で入力する
 
-通常のフォームとは別に、`dig.html`（ローカルでは `http://127.0.0.1:3000/dig.html` または `http://127.0.0.1:3000/dns-query-tool/dig.html`）で dig コマンド、または引数だけを入力できます。通常画面からも移動できます。
-入力欄は1行で、Enterキーまたは「DNSメッセージを送信」ボタンで送信できます。
+通常フォームのほかに、`dig.html` で `dig`／`delv` 形式のコマンドまたは引数を入力できます。通常画面のリンクから移動できます。入力後、Enterキーまたは「DNSメッセージを送信」ボタンで実行します。
 
 ```text
 dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec
@@ -61,7 +44,7 @@ dig @8.8.8.8 example.com -t AAAA +tcp +nsid +bufsize=1232
 delv @a.root-servers.net www.on-link.jp +qmin +nord
 ```
 
-最初の例は IN / A、サーバー `a.root-servers.net`、対象名 `www.on-link.jp`、IPv6優先・RD・CD・DO On（EDNS0もOn）に変換します。コマンドそのものをOSで実行することはありません。既存の `api/query` でDNS送信・応答解析を行います。
+最初の例は、INクラスのAレコードを `a.root-servers.net` に問い合わせる設定に変換します。IPv6優先、RD、CD、DOを有効にし、DOに伴ってEDNS0も有効になります。入力したコマンドをOS上で実行することはなく、解析した設定でDNSクエリーを送信します。
 
 | dig / delv 引数 | 本ツールの設定 |
 | --- | --- |
@@ -71,28 +54,28 @@ delv @a.root-servers.net www.on-link.jp +qmin +nord
 | `-4` / `-6` | IPv4 / IPv6優先（digの通信ファミリー固定とは異なります） |
 | `+[no]rd` / `+[no]recurse` | RD |
 | `+[no]cd` / `+[no]cdflag` | CD |
-| `+[no]dnssec`、`+[no]nsid` | DO、NSID（有効化時はEDNS0もOn） |
-| `+edns[=0]` / `+noedns`、`+bufsize=N` | EDNS0、UDPサイズ512～65535（サイズ指定時はEDNS0もOn） |
+| `+[no]dnssec`、`+[no]nsid` | DO、NSID（有効化するとEDNS0も有効） |
+| `+edns[=0]` / `+noedns`、`+bufsize=N` | EDNS0、UDPサイズ512～65535（サイズ指定時はEDNS0も有効） |
 | `+[no]tcp` / `+[no]vc` | TCP |
-| `+[no]tls`、`+[no]https[=/path]` | DoT、DoH (POST)。本ツールでは証明書を検証します |
-| `ixfr=N` | IXFRとSOA SERIAL。AXFR/IXFRは既定でTCP（`+notcp` で解除可能） |
-| `+[no]qmin` | delv形式の指定を既存のQNAME minimisationへ対応付け。委任を辿る操作は手動 |
+| `+[no]tls`、`+[no]https[=/path]` | DoT、DoH（POST）。TLS証明書を検証します |
+| `ixfr=N` | IXFRとSOA SERIAL。AXFR／IXFRは既定でTCP（`+notcp` で解除可能） |
+| `+[no]qmin` | QNAME minimisationの切り替え。委任先への問い合わせは手動です |
 
-省略時は IN、A（対象名も省略した場合は `. NS`）、RD・EDNS0 On、UDPサイズ1232です。サーバーは本ツール既定の `a.root-servers.net` とし、OSのリゾルバー設定や `.digrc` は使用しません。それ以外の本ツール独自機能（MQTYPE、QNAMEタイプ切り替えなど）は自動では追加しません。通常フォームの既定値は変わりません。
+省略時はIN、RD・EDNS0 On、UDPサイズ1232です。対象名を指定した場合のタイプはA、対象名も省略した場合はルートのNS（`. NS`）です。DNSサーバーは `a.root-servers.net` になります。OSのリゾルバー設定や `.digrc` は参照しません。MQTYPEなど、本ツール独自の設定はコマンドから自動で追加されません。ここに記載した既定値はdig形式画面に限り、通常フォームには適用されません。
 
-受信結果の上に入力コマンドを元の空白・引用符を含めて表示し、無視した引数とその値を赤字・波線で強調します。理由の一覧と、実際に反映されたAPIパラメーターも確認できます。「通常の入力フォームへ」から反映された設定を通常画面で開けます。結果のリンクをクリックした場合も通常画面に移動します。
+送信直後は、入力コマンドを空白や引用符も含めて表示します。無視した引数は理由とともに強調表示され、反映された設定も確認できます。「通常の入力フォームへ」や応答内のリンクから、通常画面に移動できます。
 
-対応しない引数（`+short`、`+trace`、`+time`、`+retry`、`-p`、`-b`、`-f`、TSIG、EDNS Cookie / ECSなど）は無視します。未対応のクエリータイプ・クラスや範囲外のオプション値も赤字で示し、既定値または直前の有効な指定を使います。値が欠けた `-t` 等や閉じていない引用符、シリアル番号のないIXFRはエラーとして送信を止めます。オプション名の省略形、複数問い合わせ、シェルの変数展開・パイプ・リダイレクト、delvのDNSSEC検証は再現しません。繰り返し指定した設定は原則として後の有効な指定を優先します。
+未対応の引数（例: `+short`、`+trace`、`+time`、`-p`、TSIG、EDNS Cookie／ECS）は無視され、その理由を表示します。未対応のタイプ・クラスや範囲外の値も無視し、既定値または直前の有効な指定を使用します。一方、値のない `-t` などの不完全な指定、閉じていない引用符、シリアル番号のないIXFRはエラーになります。オプションの省略形、複数の問い合わせ、シェル展開・パイプ・リダイレクト、`delv` によるDNSSEC検証には対応しません。同じ設定を複数回指定した場合は、原則として最後の有効な値を使用します。
 
-URL・ブラウザー履歴には `dig.html?server=...&name=...&type=...` のように、対応するDNS設定だけを保存します。元の入力コマンドや、無視したオプションとその値（例: `-y` のTSIGキー）は保存・送信しません。再読み込みや履歴からは保存した設定を使ってコマンドを再構成して再送信するため、元の空白・引用符・未対応引数の表示は復元されません。入力直後の画面では引き続き元のコマンドと無視した引数を表示します。
+URLとブラウザー履歴には、有効なDNS設定だけを保存します。入力したコマンドや無視した引数（例: `-y` のTSIGキー）は保存・送信しません。再読み込みや履歴復元時は保存済みの設定からコマンドを再構成するため、元の空白・引用符・無視した引数は復元されません。
 
-旧形式の `?command=...` URLは自動実行せず、URLから削除して再入力を案内します。ただし、既に記録された過去の履歴・アクセスログ等を削除できるものではありません。鍵を貼り付けたことがある場合は履歴・ログ等を確認し、必要に応じて鍵を更新してください。対応するDNS設定自体はURL・リクエストに含まれるため、対象名・サーバー名・DoHパス等にも機密情報を含めないでください。
+旧形式の `?command=...` URLは実行せず、URLから削除して再入力を案内します。ただし、既存のブラウザー履歴やアクセスログは削除されません。鍵を入力したことがある場合は、履歴やログを確認し、必要に応じて鍵を更新してください。DNS設定はURLやリクエストに含まれるため、対象名・サーバー名・DoHパスにも機密情報を含めないでください。
 
 ### IXFR のシリアル番号
 
-クエリータイプで `IXFR` を選ぶと「IXFR シリアル番号」欄が表示されます。取得済みゾーンの SOA SERIAL を `0`～`4294967295` の整数で指定してください（必須）。対応する dig の指定方法は `ixfr=N` です。このツールでは `type=IXFR&ixfrserial=N` として URL に保持し、問い合わせの AUTHORITY セクションに指定した SERIAL の SOA レコードを追加します。
+クエリータイプで `IXFR` を選ぶと「IXFR シリアル番号」欄が表示されます。取得済みゾーンのSOA SERIALを `0`～`4294967295` の整数で指定してください。`dig` 形式では `ixfr=N` を使います。問い合わせには、指定したSERIALを持つSOAレコードをAUTHORITYセクションに追加します。
 
-AXFR は [RFC 5936](https://datatracker.ietf.org/doc/html/rfc5936#section-2.2) により TCP を使用します。TCP送受信を有効にせず AXFR を問い合わせた場合、応答の基本情報に RFC 非準拠の案内を表示します。IXFR は UDP でも問い合わせできますが、応答が収まらない場合は TCP で再確認してください。現在は単一 DNS 応答の解析・表示のみで、複数メッセージにわたる IXFR/AXFR の転送全体の受信やゾーンの更新には対応していません。QNAME minimisation の途中では通常の A/NS 問い合わせを行い、最終的な IXFR 問い合わせにのみ SOA を追加します。
+AXFRは[RFC 5936](https://datatracker.ietf.org/doc/html/rfc5936#section-2.2)によりTCPを使用します。TCPを有効にせずAXFRを問い合わせた場合は、応答に注意を表示します。IXFRはUDPでも問い合わせできますが、応答が切り詰められた場合はTCPで再確認してください。TCPによるAXFR／IXFRでは、複数のDNSメッセージを受信して表示します。転送データを使ってローカルのゾーンを更新する機能はありません。QNAME minimisationの途中では通常のA／NS問い合わせを行い、最終的なIXFR問い合わせにのみSOAレコードを追加します。
 
 ## ローカルで実行する
 
@@ -108,13 +91,19 @@ npm install
 node dns-query-tool.js
 ```
 
+テストは次のコマンドで実行できます。
+
+```sh
+npm test
+```
+
 起動後、次のURLを開きます。
 
 http://127.0.0.1:3000/
 
-`http://127.0.0.1:3000/dns-query-tool/` でもアクセスできます。`/dns-query-tool/` は公開サイトと同じ既定のアプリケーションパスで、nginx などのリバースプロキシ配下で使う場合に利用します。
+`http://127.0.0.1:3000/dns-query-tool/` でもアクセスできます。このパスは公開サイトと同じ既定値で、nginxなどのリバースプロキシ配下で利用できます。
 
-サーバーは `127.0.0.1:3000` のみで待ち受けます。nginx からは `proxy_pass http://127.0.0.1:3000;` で転送してください。外部ホストから Node.js へ直接接続することはできません。アプリケーションのパスを変更する場合は、`APPLICATION_PATH` 環境変数を指定できます。
+サーバーは `127.0.0.1:3000` で待ち受けます。nginxからは `proxy_pass http://127.0.0.1:3000;` で転送してください。外部ホストからNode.jsへ直接接続することはできません。アプリケーションパスは `APPLICATION_PATH` 環境変数で変更できます。
 
 別のパスに変更する場合:
 
@@ -131,25 +120,25 @@ node dns-query-tool.js
 | --- | --- | --- |
 | 対象ドメイン名 (name) | `name` | 問い合わせ対象のドメイン名 |
 | クエリー先DNSサーバー | `server` | DNSサーバー (権威サーバー、フルサービスリゾルバー) のホスト名またはIPアドレス (省略時は `a.root-servers.net`) |
-| クエリータイプ (type) | `type` | `index.html` の選択肢にあるタイプのみ受付。DLV、SPFは「歴史的・特殊なタイプ」、OPT、TSIG、TKEYなど選択肢にないタイプはAPIでも拒否。EDNSはクエリータイプではなくEDNS0設定で有効化 |
-| クエリークラス (class) | `class` | `index.html` の選択肢 (`IN`、`CS`、`CH`、`HS`、`ANY`) から指定。通常は `IN` を指定する。 |
-| IXFR シリアル番号 | `ixfrserial` | `type=IXFR` のとき必須。取得済みゾーンの SOA SERIAL (`0`～`4294967295`)。他のクエリータイプでは使用しない |
-| QNAME minimisation | `qmini=1` | QNAME minimisationを有効にする |
-| - | `qposi` | QNAME minimisationで問い合わせるラベル位置 |
+| クエリータイプ（type） | `type` | 対応タイプを指定します。EDNSはクエリータイプではなくEDNS0設定で有効にします |
+| クエリークラス（class） | `class` | `IN`、`CS`、`CH`、`HS`、`ANY`。通常は `IN` を指定します |
+| IXFRシリアル番号 | `ixfrserial` | `type=IXFR` の場合に必須。取得済みゾーンのSOA SERIAL（`0`～`4294967295`） |
+| QNAME minimisation | `qmini=1` | QNAME minimisationを有効にします |
+| 問い合わせるラベル位置 | `qposi` | QNAME minimisationで使用するラベル位置です |
 | QNAMEタイプ | `qtype` | `A` または `NS` |
-| EDNS0の付与 | `edns0=1` | EDNS0を付与する |
-| DNSSEC情報の要求 (DO) | `dnssec=1` | DOフラグを付ける |
-| UDPメッセージサイズ | `udpsize` | EDNS0のUDPメッセージサイズ (`512`～`65535`) |
-| NSIDの要求 | `nsid=1` | NSID情報を要求する |
+| EDNS0 | `edns0=1` | EDNS0を付加します |
+| DNSSEC情報の要求（DO） | `dnssec=1` | DOフラグを付けます |
+| UDPメッセージサイズ | `udpsize` | EDNS0のUDPメッセージサイズ（`512`～`65535`） |
+| NSIDの要求 | `nsid=1` | NSIDを要求します |
 | MQTYPE-Query | `mqtype` | 例: `A,AAAA,MX` |
-| IPv6送受信 | `ipv6=1` | DNSサーバー名の解決やクエリー送信の際にIPv6を優先する |
-| TCP送受信 | `tcp=1` | TCPで問い合わせる |
-| TLS送受信 | `dot=1` | TLSでポート853へ問い合わせる。接続先の証明書を検証する |
-| HTTPS送受信 | `https=1` | HTTPSでポート443へ問い合わせる。接続先の証明書を検証する |
-| 再帰検索の要求 (RD) | `rd=1` | RDフラグを付ける |
-| チェックの無効化 (CD) | `cd=1` | CDフラグを付ける |
+| IPv6優先 | `ipv6=1` | DNSサーバー名の解決とクエリー送信でIPv6を優先します |
+| TCP | `tcp=1` | TCPで問い合わせます |
+| DoT | `dot=1` | ポート853でTLS接続します。証明書を検証します |
+| DoH | `https=1` | ポート443でHTTPS接続します。証明書を検証します |
+| 再帰検索の要求（RD） | `rd=1` | RDフラグを付けます |
+| チェックの無効化（CD） | `cd=1` | CDフラグを付けます |
 
-APIのエンドポイントは、アプリケーションパスからの相対パスで `api/query` です。ブラウザ画面はこのエンドポイントへリクエストし、解析済みのHTMLを受け取って結果欄に表示します。
+APIのエンドポイントは、アプリケーションパス配下の `api/query` です。ブラウザー画面はこのエンドポイントから解析済みのHTMLを受け取り、結果を表示します。
 
 例:
 
@@ -169,43 +158,21 @@ http://127.0.0.1:3000/dns-query-tool/api/query?server=8.8.8.8&name=example.com&t
 | `dns-query-options.js` | APIとdigパーサーが共有する許可タイプ・クラス |
 | `dns-query-tool.css` | 通常画面とdig画面の共通スタイル |
 | `dns-query-tool.js` | HTTPサーバー、DNSメッセージ生成、UDP/TCP通信、応答解析、HTML生成 |
-| `test-mqtype.js` | MQTYPEオプションの構築と応答解析の簡易テスト |
-| `test-ixfr.js` | IXFRオプションの構築と応答解析の簡易テスト |
-| `test-dns-query-tool.js` | DNSクエリーツール全体の簡易テスト |
-| `test-dig-command.js` | dig引数の解析、静的ファイル配信、DNS送信設定のテスト |
+| `test-mqtype.js` | MQTYPEの単体テスト |
+| `test-ixfr.js` | IXFRの入力検証、送信内容、画面復元のテスト |
+| `test-dns-query-tool.js` | DNS通信、応答解析、HTTP APIなどのテスト |
+| `test-dig-command.js` | dig引数の解析とdig画面のテスト |
 | `package.json` | Node.js依存関係の定義 |
-
-## MQTYPEテスト
-
-依存関係をインストールした後、次のコマンドでMQTYPEの簡易テストを実行できます。
-
-```sh
-node test-mqtype.js
-```
-
-このテストはMQTYPEのバイト列の構築と、`A,AAAA,MX` のような応答データの解析を確認します。実際のDNSサーバーがRFC 10029に対応しているかどうかは検証しません。
-
-## IXFRテスト
-
-Node.js 18.0 以降で、次のコマンドにより IXFR の入力検証、送信する SOA、再問い合わせリンク、フォーム復元を確認できます。
-
-```sh
-node test-ixfr.js
-```
-
-DNS通信はテスト内で置き換え、外部のDNSサーバーには接続しません。差し替えた関数とHTTPサーバーは、テストが失敗した場合も `finally` で復元・終了します。
 
 ## 注意事項
 
-- このツールはDNSの動作確認・学習を目的としています。
-- DNSSECの検証処理は行いません。DO/CDなどのフラグを付けて問い合わせるためのツールです。
-- `localhost`、ループバックアドレス、プライベートアドレスなどのDNSサーバーは問い合わせ先に指定できません。問い合わせ先はグローバルに到達可能なユニキャストアドレスに限られ、`0.0.0.0`、`::`、IPv4射影アドレス (`::ffff:127.0.0.1` 等)、リンクローカル (クラウドのメタデータ `169.254.169.254` 等)、CGNAT (`100.64.0.0/10`)、文書用・ベンチマーク用・マルチキャストなどの特殊用途アドレスも拒否します。DNSサーバー名を指定した場合も、名前解決の結果が同じ条件で検査されます。
-- 悪意あるDNSサーバーによる資源占有を防ぐため、TCP/DoH の応答は 1 メッセージあたり 65535 バイト (AXFR/IXFR は合計 4 MiB)、通信全体で 15 秒を上限として打ち切ります。DNSサーバーを名前で指定した場合の名前解決も、全体で 10 秒・問い合わせ 50 回を上限とします。
-- HTTP 応答には Content-Security-Policy、X-Content-Type-Options、X-Frame-Options などのセキュリティヘッダーを付与し、GET/HEAD 以外のメソッドは拒否します。
-- DNSサーバーへの問い合わせは、実行環境から対象サーバーへ直接行われます。DoTは853番ポートを使用し、接続先がDoT非対応の場合やTLS証明書を検証できない場合は、DoTを無効にして再試行してください。ネットワークやファイアウォールの設定によっては応答を受信できません。
-- DNSクエリーの結果は問い合わせ先サーバーやネットワークの状態によって変わります。
-- 公開サーバーとして運用する場合は、アクセス制御、レート制限、ログ、HTTPS、Node.jsの更新などを別途検討してください。特に、匿名の利用者が任意の公開DNSサーバーへ問い合わせ (AXFR を含む) を行えるため、nginx の `limit_req` / `limit_conn` などでクライアントごとの要求数・同時接続数を制限することを推奨します。
-- `127.0.0.1` への bind は外部ホストからの直接接続を防ぎますが、同一ホスト上の他プロセスからの接続は防ぎません。同一ホスト上のプロセスも制限する必要がある場合は、OS のアクセス制御や nginx と Node.js 間の認証も追加してください。
+- 本ツールはDNSの動作確認・学習を目的としており、DNSSEC署名の検証は行いません。DO／CDは問い合わせに付加するフラグです。
+- 問い合わせ先には、グローバルに到達可能なユニキャストアドレスのみ指定できます。ループバック、プライベート、リンクローカル、CGNAT、文書用などの特殊用途アドレスは拒否します。ホスト名を指定した場合も、名前解決後のIPアドレスを同じ基準で検査します。
+- DNSメッセージは最大65535バイト、AXFR／IXFRのTCP応答は合計4 MiBまでです。応答待ちはUDP／DoTで最大5秒、TCPでは最初の応答まで最大5秒・通信全体で最大15秒、DoHでは無通信が5秒続くか通信開始から15秒経過した時点で打ち切ります。DNSサーバー名の解決は問い合わせ通信の前に行われ、別途最大10秒・50問い合わせに制限されます。
+- DNSサーバーへの通信はアプリケーションの実行環境から直接行います。使用ポートはUDP／TCPが53、DoTが853、DoHが443です。ネットワークやファイアウォールによっては通信できない場合があります。
+- HTTP応答にはセキュリティヘッダーを付与し、GET／HEAD以外のメソッドを拒否します。
+- 公開運用ではアクセス制御やレート制限を検討してください。匿名利用者が公開DNSサーバーへ任意の問い合わせ（AXFRを含む）を行えるため、nginxの `limit_req`／`limit_conn` などで要求数や同時接続数を制限することを推奨します。
+- Node.jsは `127.0.0.1` のみで待ち受けるため、外部ホストから直接接続できません。ただし、同一ホスト上の別プロセスからの接続は防げません。必要に応じてOSのアクセス制御やリバースプロキシとの間の認証を設定してください。
 
 ## 依存関係
 

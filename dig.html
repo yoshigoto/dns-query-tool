@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>dig形式 - DNSクエリー送信ツール</title>
+    <title>dig形式で入力 - DNSクエリー送信ツール</title>
     <link rel="stylesheet" href="dns-query-tool.css">
     <script src="dns-query-options.js" defer></script>
     <script src="dig-command.js" defer></script>
@@ -11,44 +11,35 @@
 </head>
 <body>
     <main class="container">
-        <h2>DNSクエリー送信ツール - dig形式</h2>
+        <h1>DNSクエリー送信ツール - dig形式</h1>
         <p><a id="form-link" href="./">通常の入力フォームへ</a></p>
         <section id="search-panel">
             <form id="dig-search">
-                <label for="command">dig コマンドとその引数:</label>
+                <label for="command">dig／delv形式のコマンドまたは引数:</label>
                 <input type="text" id="command" class="dig-input" required autofocus spellcheck="false" autocomplete="off"
+                    aria-describedby="command-help"
                     placeholder="dig in a @a.root-servers.net www.on-link.jp -6 +rd +cd +dnssec">
                 <button type="submit">DNSメッセージを送信</button>
             </form>
         </section>
-        <section class="explanation">
-            <p>コマンドは実行せず、対応する引数だけを本ツールの DNS送信設定へ変換します。
-                未対応の引数と値があれば「入力されたコマンド」欄に赤字・波線で表示し、無視した理由も表示します。</p>
-            <p>URLや履歴には、本ツールで有効な DNS設定だけを保存します。元の入力や無視した引数は保存しません。
-                再読み込み・履歴復元時には設定からコマンドを再構成します。鍵などの機密情報は入力しないでください。</p>
-            <p>既定値: IN、A（対象ドメイン名の省略時は . NS）、RD On、EDNS0 On、UDPサイズ 1232、DNSサーバー a.root-servers.net です。
-                OSのリゾルバー設定や .digrc は使用しません。</p>
+        <section class="explanation" id="command-help">
+            <p>入力したコマンドは実行せず、対応する設定に変換してDNSクエリーを送信します。対応していない引数は無視し、その理由を結果の上に表示します。</p>
+            <p>URLや履歴に保存するのは有効なDNS設定だけです。元のコマンドや無視した引数は保存しません。鍵などの機密情報は入力しないでください。</p>
+            <p>既定値はIN、RD・EDNS0有効、UDPサイズ1232、DNSサーバー <code>a.root-servers.net</code> です。対象名を省略するとルートのNSを問い合わせます。OSのリゾルバー設定や <code>.digrc</code> は使用しません。</p>
             <details>
                 <summary>対応オプションと制限</summary>
-                <p>@server、name/type/class（順不同）、-q、-t、-c、-x、-4/-6、
-                    +[no]rd/recurse、+[no]cd/cdflag、+[no]dnssec、+[no]nsid、+[no]tcp/vc、
-                    +[no]tls、+[no]https[=/path]、+edns[=0]/+noedns、+bufsize=N、
-                    ixfr=N、delv の +[no]qmin に対応します。オプション名の省略形には対応しません。</p>
-                <p>-4/-6 は、本ツールにおいては IPv4/IPv6優先設定です（dig の通信ファミリー固定とは異なります）。
-                    TLS/HTTPS では証明書を検証します。+qmin は本ツールの QNAME minimisation を有効化しますが、本ツールの仕様の通り、委任を辿る操作は手動です。
-                    同様に、DNSSEC検証は行いません。</p>
-                <p>問い合わせは 1件のみです。表示形式の指定オプション、+trace、タイムアウト、任意のポート、送信元指定、
-                    TSIG、ファイル入力、未対応の EDNSオプションなどは無視します。
-                    シェルの変数展開、パイプ、リダイレクトは処理しません。</p>
-                <p>結果中のリンクで委任を辿ると、通常の入力フォームに遷移します。</p>
+                <p><code>@server</code>、対象名／タイプ／クラス、<code>-q</code>、<code>-t</code>、<code>-c</code>、<code>-x</code>、<code>-4</code>／<code>-6</code>、<code>+[no]rd</code>／<code>+[no]recurse</code>、<code>+[no]cd</code>／<code>+[no]cdflag</code>、<code>+[no]dnssec</code>、<code>+[no]nsid</code>、<code>+[no]tcp</code>／<code>+[no]vc</code>、<code>+[no]tls</code>、<code>+[no]https[=/path]</code>、<code>+edns[=0]</code>／<code>+noedns</code>、<code>+bufsize=N</code>、<code>ixfr=N</code>、<code>+[no]qmin</code>に対応します。タイプやクラスは順不同で指定できます。AXFR／IXFRは既定でTCPを使用します。</p>
+                <p><code>-4</code>／<code>-6</code> は通信ファミリーを固定するのではなく、IPv4／IPv6を優先します。DoT／DoHではTLS証明書を検証します。QNAME minimisationで委任先をたどる操作は手動です。DNSSEC検証は行いません。</p>
+                <p>問い合わせは1件のみです。表示形式、<code>+trace</code>、タイムアウト、任意ポート、送信元アドレス、TSIG、ファイル入力、未対応のEDNSオプションなどは処理しません。シェルの変数展開、パイプ、リダイレクト、オプション名の省略形にも対応しません。</p>
+                <p>応答内のリンクをクリックすると、通常の入力フォームに移動します。</p>
             </details>
         </section>
         <section id="dig-summary" aria-live="polite" hidden>
-            <h3>入力されたコマンド</h3>
+            <h2>入力されたコマンド</h2>
             <code id="parsed-command" class="dig-command"></code>
             <ul id="ignored-options"></ul>
             <details>
-                <summary>反映された設定（APIパラメーター）</summary>
+                <summary>反映された設定</summary>
                 <pre id="parsed-settings" class="dig-settings"></pre>
             </details>
         </section>

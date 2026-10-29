@@ -53,6 +53,14 @@ const OPCODE_NAMES = {
     5: 'UPDATE'
 };
 
+const HTML_ESCAPES = Object.freeze({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+});
+
 const getOpcodeName = (response) => {
     const opcode = response.opcode;
     if (typeof opcode === 'string') return opcode.toUpperCase();
@@ -297,16 +305,7 @@ const getEdeErrorName = (infoCode) => {
 // HTMLエスケープ処理 (XSSインジェクション対策)
 const escapeHtml = (str) => {
     if (str === null || typeof str === 'undefined') return '';
-    return String(str).replace(/[&<>"']/g, (match) => {
-        const escapes = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-        };
-        return escapes[match];
-    });
+    return String(str).replace(/[&<>"']/g, (match) => HTML_ESCAPES[match]);
 };
 
 const addLinkToDisplayData = (origin, pathname, dnsServer, domainName, queryType, recursionDesired, checkingDisabled,
@@ -1995,7 +1994,7 @@ const resolveDnsServerAddress = async (dnsServer, preferIpv6, resolutionDepth = 
         }
         try {
             return await resolveDnsServerAddressByType(dnsServer, true, resolutionDepth, queryServer, sendTcp, budget);
-        } catch (subError) {
+        } catch {
             throw error;
         }
     }
@@ -2112,6 +2111,17 @@ const SECURITY_HEADERS = Object.freeze({
     'Cross-Origin-Resource-Policy': 'same-origin'
 });
 
+const STATIC_FILES = Object.freeze({
+    '/': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
+    '/index.html': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
+    '/dig.html': { file: 'dig.html', contentType: 'text/html; charset=utf-8' },
+    '/dns-query-tool.css': { file: 'dns-query-tool.css', contentType: 'text/css; charset=utf-8' },
+    '/dns-query-options.js': { file: 'dns-query-options.js', contentType: 'application/javascript; charset=utf-8' },
+    '/dig-command.js': { file: 'dig-command.js', contentType: 'application/javascript; charset=utf-8' },
+    '/dig-client.js': { file: 'dig-client.js', contentType: 'application/javascript; charset=utf-8' },
+    '/dns-query-tool-client.js': { file: 'dns-query-tool-client.js', contentType: 'application/javascript; charset=utf-8' }
+});
+
 const server = http.createServer((req, res) => {
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
         res.setHeader(name, value);
@@ -2146,17 +2156,7 @@ const handleRequest = async (req, res) => {
     if (parsedUrl.pathname === APPLICATION_PATH || parsedUrl.pathname.startsWith(`${APPLICATION_PATH}/`)) {
         parsedUrl.pathname = parsedUrl.pathname.slice(APPLICATION_PATH.length) || '/';
     }
-    const staticFiles = {
-        '/': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
-        '/index.html': { file: 'index.html', contentType: 'text/html; charset=utf-8' },
-        '/dig.html': { file: 'dig.html', contentType: 'text/html; charset=utf-8' },
-        '/dns-query-tool.css': { file: 'dns-query-tool.css', contentType: 'text/css; charset=utf-8' },
-        '/dns-query-options.js': { file: 'dns-query-options.js', contentType: 'application/javascript; charset=utf-8' },
-        '/dig-command.js': { file: 'dig-command.js', contentType: 'application/javascript; charset=utf-8' },
-        '/dig-client.js': { file: 'dig-client.js', contentType: 'application/javascript; charset=utf-8' },
-        '/dns-query-tool-client.js': { file: 'dns-query-tool-client.js', contentType: 'application/javascript; charset=utf-8' }
-    };
-    const staticFile = staticFiles[parsedUrl.pathname];
+    const staticFile = STATIC_FILES[parsedUrl.pathname];
     if (staticFile) {
         fs.readFile(path.join(__dirname, staticFile.file), (err, content) => {
             if (err) {
@@ -2394,14 +2394,11 @@ const handleRequest = async (req, res) => {
             type: 'OPT',
             name: '.',
             udpPayloadSize: udpSize,
-            flags: dnssecOk ? DNSSEC_OK : 0
+            flags: dnssecOk ? DNSSEC_OK : 0,
+            options: []
         };
         if (nsidEnable) {
-            const option = { code: 3, data: Buffer.alloc(0) };
-            if (typeof edns0Option.options === "undefined") {
-                edns0Option.options = new Array();
-            }
-            edns0Option.options.push(option);
+            edns0Option.options.push({ code: 3, data: Buffer.alloc(0) });
         }
         if (mQType !== '') {
             const option = { code: 20 };
@@ -2415,25 +2412,15 @@ const handleRequest = async (req, res) => {
                     res.end(html);
                     return;
                 }
-                const mQTypeArray = mQType.split(',');
-                const mQlength = mQTypeArray.length * 2;
-                const mQdata = { data: Buffer.alloc(mQlength) };
-                let offset = 0;
-                for (const type of mQTypeArray) {
-                    mQdata.data.writeUInt16BE(getDnsTypeCode(type), offset);
-                    offset += 2;
+                const types = mQType.split(',');
+                option.data = Buffer.alloc(types.length * 2);
+                for (let index = 0; index < types.length; index++) {
+                    option.data.writeUInt16BE(getDnsTypeCode(types[index]), index * 2);
                 }
-                option.data = mQdata.data;
-            }
-            if (typeof edns0Option.options === "undefined") {
-                edns0Option.options = new Array();
             }
             edns0Option.options.push(option);
         }
-        if (typeof queryPacket.additionals === "undefined") {
-            queryPacket.additionals = new Array();
-        }
-        queryPacket.additionals.push(edns0Option);
+        queryPacket.additionals = [edns0Option];
     }
 
     let buf;
@@ -2608,18 +2595,20 @@ const handleRequest = async (req, res) => {
 
         tcpClient.on('data', data => {
             if (finished) return;
-            // TCPの場合、アプリケーションへはいくつかの区切りで転送される (イベントが発生する) ので、受信バッファー (receivedBuffer) は外に確保しておく
-            totalReceivedBytes += data.byteLength;
-            receivedBuffer = Buffer.concat([receivedBuffer, data]);
+            totalReceivedBytes += data.length;
+            const pendingBuffer = receivedBuffer.length > 0
+                ? Buffer.concat([receivedBuffer, data])
+                : data;
+            let offset = 0;
 
             // DNSメッセージの先頭 2バイトに DNSメッセージのサイズが格納されているので、揃ったフレームから 1つずつ処理する
-            while (!finished && receivedBuffer.byteLength >= 2) {
-                const frameLength = receivedBuffer.readUInt16BE(0) + 2;
-                if (receivedBuffer.byteLength < frameLength) {
+            while (!finished && pendingBuffer.length - offset >= 2) {
+                const frameLength = pendingBuffer.readUInt16BE(offset) + 2;
+                if (pendingBuffer.length - offset < frameLength) {
                     break;
                 }
-                const frame = receivedBuffer.subarray(0, frameLength);
-                receivedBuffer = receivedBuffer.subarray(frameLength);
+                const frame = pendingBuffer.subarray(offset, offset + frameLength);
+                offset += frameLength;
                 receivedFrameCount++;
                 clearTimeout(timeoutId);
                 try {
@@ -2645,6 +2634,10 @@ const handleRequest = async (req, res) => {
                     tcpClient.end();
                 }
             }
+
+            receivedBuffer = offset === pendingBuffer.length
+                ? Buffer.alloc(0)
+                : pendingBuffer.subarray(offset);
 
             if (!finished && totalReceivedBytes > maxResponseBytes) {
                 finish(`<div class="result error"><p>エラー: 応答サイズが上限 (${maxResponseBytes} バイト) を超えたため、受信を打ち切りました。</p></div>`);
