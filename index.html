@@ -8,7 +8,7 @@
 </head>
 <body>
     <main class="container">
-        <h2><a href="./">DNSクエリー送信ツール</a></h2>
+        <h1><a href="./">DNSクエリー送信ツール</a></h1>
         <p><a href="dig.html">dig コマンド形式で入力する</a></p>
         <section id="search-panel">
             <form id="search">
@@ -101,28 +101,28 @@
                     <input type="hidden" id="qposi" name="qposi" value="255">
                 </div>
                 <div class="option-group">
-                    <div class="option-div">
-                        <label class="label-wide">クエリータイプ:</label>
+                    <div class="option-div" role="group" aria-labelledby="qtype-label">
+                        <label id="qtype-label" for="qtype-a" class="label-wide">QNAME minimisationのクエリータイプ:</label>
                         <label style="font-weight:normal; width:auto;">
                             <input type="radio" id="qtype-a" name="qtype" value="A" checked>
-                            <span class="label-description">A/AAAA (<a href="https://datatracker.ietf.org/doc/html/rfc9156" target="_blank">RFC 9156</a>)</span>
+                            <span class="label-description">A／AAAA（<a href="https://datatracker.ietf.org/doc/html/rfc9156" target="_blank" rel="noopener noreferrer">RFC 9156</a>）</span>
                         </label>
                         <label style="font-weight:normal; width:auto;">
                             <input type="radio" id="qtype-ns" name="qtype" value="NS">
-                            <span class="label-description">NS (<a href="https://datatracker.ietf.org/doc/html/rfc7816" target="_blank">RFC 7816</a>)</span>
+                            <span class="label-description">NS（<a href="https://datatracker.ietf.org/doc/html/rfc7816" target="_blank" rel="noopener noreferrer">RFC 7816</a>）</span>
                         </label>
                     </div>
                 </div>
                 <div>
                     <label for="edns0" class="label-wide">EDNS0の付与:</label>
                     <input type="checkbox" id="edns0" name="edns0" value="1">
-                    <label class="label-description" for="edns0">(<a href="https://datatracker.ietf.org/doc/html/rfc6891" target="_blank">RFC 6891</a>)</label>
+                    <label class="label-description" for="edns0">（<a href="https://datatracker.ietf.org/doc/html/rfc6891" target="_blank" rel="noopener noreferrer">RFC 6891</a>）</label>
                 </div>
                 <div class="option-group">
                     <div class="option-div">
                         <label for="dnssec" class="label-wide">DNSSEC情報の要求 (DO):</label>
                         <input type="checkbox" id="dnssec" name="dnssec" value="1">
-                        <label class="label-description" for="dnssec">(<a href="https://datatracker.ietf.org/doc/html/rfc3225" target="_blank">RFC 3225</a>)</label>
+                        <label class="label-description" for="dnssec">（<a href="https://datatracker.ietf.org/doc/html/rfc3225" target="_blank" rel="noopener noreferrer">RFC 3225</a>）</label>
                     </div>
                     <div class="option-div">
                         <label for="udpsize" class="label-wide">UDPメッセージサイズ:</label>
@@ -132,93 +132,66 @@
                     <div class="option-div">
                         <label for="nsid" class="label-wide">NSIDの要求:</label>
                         <input type="checkbox" id="nsid" name="nsid" value="1">
-                        <label class="label-description" for="nsid">(<a href="https://datatracker.ietf.org/doc/html/rfc5001" target="_blank">RFC 5001</a>)</label>
+                        <label class="label-description" for="nsid">（<a href="https://datatracker.ietf.org/doc/html/rfc5001" target="_blank" rel="noopener noreferrer">RFC 5001</a>）</label>
                     </div>
                     <div class="option-div">
                         <label for="mqtype" class="label-wide">MQTYPE-Query:</label>
                         <input type="text" class="input-wide" id="mqtype" name="mqtype" placeholder="AAAA,TXT">
-                        <label class="label-description" for="mqtype">(<a href="https://datatracker.ietf.org/doc/html/rfc10029" target="_blank">RFC 10029</a>)</label>
+                        <label class="label-description" for="mqtype">（<a href="https://datatracker.ietf.org/doc/html/rfc10029" target="_blank" rel="noopener noreferrer">RFC 10029</a>）</label>
                     </div>
                 </div>
                 <div>
                     <label for="ipv6" class="label-wide">IPv6送受信:</label>
                     <input type="checkbox" id="ipv6" name="ipv6" value="1">
-                    <label class="label-description" for="ipv6">(可能な場合に IPv6で通信したいときはチェック)</label>
+                    <label class="label-description" for="ipv6">（DNSサーバー名の解決と問い合わせにIPv6を優先）</label>
                 </div>
                 <div>
                     <label for="tcp" class="label-wide">TCP送受信:</label>
                     <input type="checkbox" id="tcp" name="tcp" value="1">
-                    <label class="label-description" for="tcp">(レスポンスに TCフラグが立っていたときはチェック)</label>
+                    <label class="label-description" for="tcp">（UDPではなくTCPで問い合わせ）</label>
                 </div>
                 <div>
                     <label for="dot" class="label-wide">TLS送受信:</label>
                     <input type="checkbox" id="dot" name="dot" value="1">
-                    <label class="label-description" for="dot">(DoTで問い合わせたいときはチェック - ポート853)</label>
+                    <label class="label-description" for="dot">（DoTで問い合わせ - ポート853）</label>
                 </div>
                 <div>
                     <label for="https" class="label-wide">HTTPS送受信:</label>
                     <input type="checkbox" id="https" name="https" value="1">
-                    <label class="label-description" for="https">(DoHで問い合わせたいときはチェック)</label>
+                    <label class="label-description" for="https">（DoHで問い合わせ - ポート443）</label>
                 </div>
                 <div class="option-group">
                     <div class="option-div">
                         <label for="httpspath" class="label-wide">DoHエンドポイントパス:</label>
                         <input type="text" class="input-wide" id="httpspath" name="httpspath" placeholder="/dns-query" disabled>
-                        <label class="label-description" for="httpspath">(省略時は /dns-query)</label>
+                        <label class="label-description" for="httpspath">（既定値: <code>/dns-query</code>）</label>
                     </div>
                 </div>
                 <div>
                     <label for="rd" class="label-wide">再帰検索の要求 (RD):</label>
                     <input type="checkbox" id="rd" name="rd" value="1">
-                    <label class="label-description" for="rd">(クエリー先がフルサービスリゾルバーのときはチェック)</label>
+                    <label class="label-description" for="rd">（フルサービスリゾルバーに再帰検索を要求）</label>
                 </div>
                 <div>
                     <label for="cd" class="label-wide">チェックの無効化 (CD):</label>
                     <input type="checkbox" id="cd" name="cd" value="1">
-                    <label class="label-description" for="cd">(クエリー先に対して DNSSEC検証をしないよう要求したいときはチェック)</label>
+                    <label class="label-description" for="cd">（クエリー先にDNSSEC検証を行わないよう要求）</label>
                 </div>
                 <div>
                     <button type="submit">DNSメッセージを送信</button> 
-                    <button type="button" id="qmini-reset">Qminiリセット</button>
+                    <button type="button" id="qmini-reset">QNAME minimisationをリセット</button>
                 </div>
             </form>
         </section>
         <p><button type="button" id="search-toggle">入力欄非表示</button></p>
         <section id="results" aria-live="polite"></section>
         <section id="description" class="explanation">
-            <h3>説明</h3>
-            <p>digコマンドや drillコマンドのように DNSクエリーを送信し、受信した内容を表示します。</p>
-            <p>■デフォルトでは<b><a href="https://jprs.jp/glossary/index.php?ID=0158" target="_blank">フルサービスリゾルバー</a></b>の動作 (処理) を<b>体験</b>できるようになっています。
-            <ol>
-                <li><b>「対象ドメイン名」を入力</b>して<b>「送信」</b>してください。</li>
-                <ul>
-                    <li>AUTHORITYや ADDITIONALの情報に含まれるドメイン名 (NS) や IPアドレス (A, AAAA) をクリックすることで、<a href="https://jprs.jp/glossary/index.php?ID=0152" target="_blank">委任</a>を辿る (非再帰検索/反復検索を体験する) ことができます。</li>
-                </ul>
-                <li>「クエリー先DNSサーバー」は別の<a href="https://jprs.jp/glossary/index.php?ID=0145">権威サーバー</a>のドメイン名か IPアドレスを入力することもできます。</li>
-                <li>「Qminiリセット」をクリックすることで、各種パラメーターを保持しつつ、以下のパラメーターをデフォルト値に戻します。</li>
-                <ul>
-                    <li>「クエリー先DNSサーバー」を「a.root-servers.net」にします。</li>
-                    <li>QNAME minimisationにおけるドメイン名の位置情報 (どのラベルより後ろを問い合わせているか) をリセットします。</li>
-                </ul>
-            </ol>
-            </p>
-            <p>■<b><a href="https://jprs.jp/glossary/index.php?ID=0197" target="_blank">スタブリゾルバー</a></b>の動作 (処理) も<b>体験</b>することができます。
-                <ol><li>「クエリー先DNSサーバー」に<a href="https://jprs.jp/glossary/index.php?ID=0158" target="_blank">フルサービスリゾルバー</a>のドメイン名か IPアドレスを入力し、</li>
-                    <li>「対象ドメイン名」を入力して、</li>
-                    <li>「RDフラグ」にチェックを入れて、</li>
-                    <li>「送信」してください。</li>
-                    <ul><li><a href="https://jprs.jp/glossary/index.php?ID=0084" target="_blank">名前解決</a>は入力した<a href="https://jprs.jp/glossary/index.php?ID=0158" target="_blank">フルサービスリゾルバー</a>が代わりにやってくれますので、これ以上の操作は不要です。</li></ul>
-                </ol>
-            </p>
-            <p>■<b>拡張解析機能 (RFC対応)</b>
-                <ul>
-                    <li><b>ヘッダー情報</b>: Opcode / QR / Reserved (Z) フラグ等の解析・表示</li>
-                    <li><b>RFC 2308 (Negative Caching)</b>: NXDOMAIN / NODATA 応答時のネガティブキャッシュ有効期間 (TTL) の算出・表示</li>
-                    <li><b>EDNS0 オプション解析</b>: EDNS Client Subnet (ECS, RFC 7871), DNS Cookie (RFC 7873/9018), Padding (RFC 7830), NSID (RFC 5001), EDE (RFC 8914), MQTYPE (RFC 10029) の自動デコード</li>
-                    <li><b>リソースレコード解読</b>: TLSA (RFC 6698), SSHFP (RFC 4255), NAPTR (RFC 3403), HTTPS/SVCB (RFC 9460) 等のフォーマット解読</li>
-                </ul>
-            </p>
-            <p>※DNSSEC検証はしません。</p>
+            <h2>使い方</h2>
+            <p>既定では <code>a.root-servers.net</code> に再帰検索を要求せず問い合わせます。返された委任先をたどるには、応答のAUTHORITY／ADDITIONALセクションにあるNS名やIPアドレスのリンクをクリックして、次の問い合わせを行ってください。委任先への問い合わせは自動ではありません。</p>
+            <p>別の権威サーバーへ問い合わせる場合は、そのホスト名またはIPアドレスを「クエリー先DNSサーバー」に指定します。名前解決をフルサービスリゾルバーに任せる場合は、そのサーバーを指定してRDを有効にしてください。</p>
+            <p>QNAME minimisationを有効にすると、問い合わせる名前を段階的に短くします。委任先をたどる操作は引き続き手動です。「QNAME minimisationをリセット」は、問い合わせ先を <code>a.root-servers.net</code> に戻し、問い合わせ位置を初期化します。ほかの設定は保持します。</p>
+            <h2>応答の解析</h2>
+            <p>DNSヘッダー、各応答セクション、EDNSオプション、主要なリソースレコードを解析して表示します。NXDOMAIN／NODATA応答では、SOAレコードに基づくネガティブキャッシュ時間も表示します。DNSSECの署名検証は行いません。</p>
         </section>
     </main>
     <footer class="footer">
