@@ -1932,6 +1932,66 @@ test('TCP応答が1バイトだけで切断されてもプロセスを停止さ�
     assert.match(response.body, /応答を受信する前に TCP 接続が切断されました/);
 });
 
+test('TCP応答の分割されたプレフィックス・本文と複数フレーム後の不完全データを処理する', async (testContext) => {
+    const mockPort = await startMockTcpDnsServer(testContext, (socket) => {
+        let buffer = Buffer.alloc(0);
+        socket.on('data', (data) => {
+            buffer = Buffer.concat([buffer, data]);
+            if (buffer.length < 2 || buffer.length < buffer.readUInt16BE(0) + 2) return;
+
+            const query = dnsPacket.streamDecode(buffer);
+            const responseFrame = (name, address) => dnsPacket.streamEncode({
+                type: 'response',
+                id: query.id,
+                flags: 0,
+                questions: query.questions,
+                answers: [{ type: 'A', name, class: 'IN', ttl: 60, data: address }]
+            });
+
+            if (query.questions[0].type === 'AXFR') {
+                const frames = [
+                    responseFrame('first.example.com', '203.0.114.1'),
+                    responseFrame('second.example.com', '203.0.114.2'),
+                    responseFrame('incomplete.example.com', '203.0.114.3')
+                ];
+                socket.end(Buffer.concat([...frames.slice(0, 2), frames[2].subarray(0, 5)]));
+                return;
+            }
+
+            const frame = responseFrame(query.questions[0].name, '203.0.114.10');
+            if (query.questions[0].name.startsWith('prefix-split.')) {
+                socket.write(frame.subarray(0, 1));
+                setTimeout(() => {
+                    socket.write(frame.subarray(1, 2 + Math.floor((frame.length - 2) / 2)));
+                    setTimeout(() => socket.end(frame.subarray(2 + Math.floor((frame.length - 2) / 2))), 10);
+                }, 10);
+            } else {
+                socket.write(frame.subarray(0, 2));
+                setTimeout(() => {
+                    socket.write(frame.subarray(2, 2 + Math.floor((frame.length - 2) / 2)));
+                    setTimeout(() => socket.end(frame.subarray(2 + Math.floor((frame.length - 2) / 2))), 10);
+                }, 10);
+            }
+        });
+    });
+    redirectTcpPort53(testContext, mockPort);
+    const port = await listenServerForTest(testContext);
+
+    const prefixSplit = await request(port,
+        '/dns-query-tool/api/query?name=prefix-split.example.com&server=8.8.8.8&tcp=1');
+    assert.match(prefixSplit.body, /203\.0\.114\.10/);
+
+    const bodySplit = await request(port,
+        '/dns-query-tool/api/query?name=body-split.example.com&server=8.8.8.8&tcp=1');
+    assert.match(bodySplit.body, /203\.0\.114\.10/);
+
+    const multipleFrames = await request(port,
+        '/dns-query-tool/api/query?name=example.com&server=8.8.8.8&tcp=1&type=AXFR');
+    assert.equal(multipleFrames.body.match(/first\.example\.com/g)?.length, 1);
+    assert.equal(multipleFrames.body.match(/second\.example\.com/g)?.length, 1);
+    assert.doesNotMatch(multipleFrames.body, /incomplete\.example\.com/);
+});
+
 test('TCP応答は1メッセージ受信後に直ちに返し、接続を保持し続ける相手を待たない', async (testContext) => {
     const mockPort = await startMockTcpDnsServer(testContext, (socket) => {
         let buffer = Buffer.alloc(0);
